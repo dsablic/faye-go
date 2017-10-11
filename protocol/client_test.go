@@ -1,11 +1,13 @@
 package protocol_test
 
 import (
-	"github.com/roncohen/faye-go/memory"
-	. "github.com/roncohen/faye-go/protocol"
 	"log"
 	"os"
 	"testing"
+
+	"github.com/roncohen/faye-go/memory"
+	. "github.com/roncohen/faye-go/protocol"
+	"github.com/satori/go.uuid"
 )
 
 var test_ns = memory.NewMemoryNamespace()
@@ -31,8 +33,7 @@ func (l Logger) Warnf(format string, args ...interface{}) {
 }
 
 func getNewClient() Client {
-	msgStore := memory.NewMemoryMsgStore()
-	return NewClient(test_ns.Generate(), msgStore, Logger{log.New(os.Stdout, "", 0)})
+	return NewClient(uuid.NewV4().String(), Logger{log.New(os.Stdout, "", 0)})
 }
 
 func getMsgWithId(responses []Message, msgId string) Message {

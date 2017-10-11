@@ -1,69 +1,64 @@
 package memory
 
 import (
-	creg "github.com/roncohen/cleaningRegister"
-	"time"
+	"sync"
+
 	"github.com/roncohen/faye-go/protocol"
 	"github.com/roncohen/faye-go/utils"
 )
 
 type ClientRegister struct {
-	clients              *creg.CleaningRegister
-	subscriptionRegister *SubscriptionRegister
-	logger               utils.Logger
+	logger  utils.Logger
+	mutex   sync.RWMutex
+	clients map[string]*protocol.Client
 }
 
 func NewClientRegister(logger utils.Logger) *ClientRegister {
-	subReg := NewSubscriptionRegister()
-
-	shouldRemove := func(key interface{}, item interface{}) bool {
-		client := item.(*protocol.Client)
-		return client.IsExpired()
+	return &ClientRegister{
+		logger:  logger,
+		clients: make(map[string]*protocol.Client),
 	}
-
-	removed := func(key interface{}, item interface{}) {
-		client := item.(*protocol.Client)
-		logger.Infof("Removing client %s due to inactivity", client.Id())
-		subReg.RemoveClient(client.Id())
-	}
-
-	clientreg := ClientRegister{
-		clients:              creg.New(1*time.Minute, shouldRemove, removed),
-		subscriptionRegister: subReg,
-		logger:               logger,
-	}
-
-	return &clientreg
 }
 
-func (cr ClientRegister) AddClient(client *protocol.Client) {
-	cr.clients.Put(client.Id(), client)
+func (cr *ClientRegister) AddClient(client *protocol.Client) {
+	cr.mutex.Lock()
+	cr.clients[client.Id()] = client
+	cr.mutex.Unlock()
 }
 
-func (cr ClientRegister) removeClient(clientId string) {
-	// TODO: More cleanups
-	cr.subscriptionRegister.RemoveClient(clientId)
-}
-
-func (cr ClientRegister) GetClient(clientId string) *protocol.Client {
-	client, ok := cr.clients.Get(clientId)
+func (cr *ClientRegister) GetClient(clientId string) *protocol.Client {
+	cr.mutex.RLock()
+	defer cr.mutex.RUnlock()
+	client, ok := cr.clients[clientId]
 	if ok {
-		return client.(*protocol.Client)
-	} else {
-		return nil
+		return client
 	}
+	return nil
 }
 
-/* Front for SubscriptionRegister */
-
-func (cr ClientRegister) AddSubscription(clientId string, patterns []string) {
-	cr.subscriptionRegister.AddSubscription(clientId, patterns)
+func (cr *ClientRegister) Count() int {
+	cr.mutex.RLock()
+	defer cr.mutex.RUnlock()
+	return len(cr.clients)
 }
 
-func (cr ClientRegister) RemoveSubscription(clientId string, patterns []string) {
-	cr.subscriptionRegister.RemoveSubscription(clientId, patterns)
-}
+func (cr *ClientRegister) Reap(onRemove func(id string)) []string {
+	cr.mutex.RLock()
+	dead := []string{}
+	for k, v := range cr.clients {
+		if v.ShouldReap() {
+			dead = append(dead, k)
+		}
+	}
+	cr.mutex.RUnlock()
+	if len(dead) > 0 {
+		cr.mutex.Lock()
+		for _, id := range dead {
+			onRemove(id)
+			delete(cr.clients, id)
+		}
+		cr.mutex.Unlock()
+	}
 
-func (cr ClientRegister) GetClients(patterns []string) []string {
-	return cr.subscriptionRegister.GetClients(patterns)
+	return dead
 }

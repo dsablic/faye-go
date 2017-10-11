@@ -2,7 +2,13 @@ package protocol
 
 const BAYEUX_VERSION = "1.0"
 
-var DEFAULT_ADVICE = map[string]string{"reconnect": "retry", "interval": "0", "timeout": "10000"}
+type Advice struct {
+	Reconnect string `json:"reconnect"`
+	Interval  int    `json:"interval"`
+	Timeout   int    `json:"timeout"`
+}
+
+var DEFAULT_ADVICE = Advice{Reconnect: "retry", Interval: 0, Timeout: 10000}
 
 type Message map[string]interface{}
 

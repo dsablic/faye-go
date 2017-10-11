@@ -1,19 +1,17 @@
 package adapters
 
 import (
-	// "code.google.com/p/go.net/websocket"
 	"encoding/json"
+	"log"
+	"net/http"
+
 	"github.com/gorilla/websocket"
 	"github.com/roncohen/faye-go"
 	"github.com/roncohen/faye-go/transport"
-	"log"
-	"net/http"
 )
 
 /* HTTP handler that can be dropped into the standard http handlers list */
-func FayeHandler(server faye.Server) http.Handler {
-	// websocketHandler := websocket.Handler(transport.WebsocketServer(server))
-
+func FayeHandler(server *faye.Server) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Upgrade") == "websocket" {
 
@@ -40,15 +38,3 @@ func FayeHandler(server faye.Server) http.Handler {
 		}
 	})
 }
-
-// func handler(w http.ResponseWriter, r *http.Request) {
-//     ws, err := websocket.Upgrade(w, r, nil, 1024, 1024)
-//     if _, ok := err.(websocket.HandshakeError); ok {
-//         http.Error(w, "Not a websocket handshake", 400)
-//         return
-//     } else if err != nil {
-//         log.Println(err)
-//         return
-//     }
-//     ... Use conn to send and receive messages.
-// }

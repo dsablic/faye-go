@@ -1,18 +1,13 @@
 package protocol
 
 import (
-	"github.com/roncohen/faye-go/utils"
 	"reflect"
 	"sync"
 	"time"
+
+	"github.com/roncohen/faye-go/utils"
 )
 
-type MsgStore interface {
-	EnqueueMessages([]Message)
-	GetAndClearMessages() []Message
-}
-
-// Connect requests starts a session
 type Session struct {
 	conn     Connection
 	timeout  int
@@ -33,10 +28,7 @@ func NewSession(client *Client, conn Connection, timeout int, response Message, 
 	return &session
 }
 
-func (s Session) End() {
-	// c.mutex.Lock()
-	// defer c.mutex.Unlock()
-
+func (s *Session) End() {
 	if s.conn.IsConnected() {
 		s.conn.Send([]Message{s.response})
 	} else {
@@ -47,28 +39,22 @@ func (s Session) End() {
 type Client struct {
 	clientId    string
 	connection  Connection
-	msgStore    MsgStore
-	isConnected bool
 	responseMsg Message
-	mutex       sync.Mutex
+	mutex       sync.RWMutex
 	lastSession *Session
 	created     time.Time
 	logger      utils.Logger
 }
 
-func NewClient(clientId string, msgStore MsgStore, logger utils.Logger) Client {
-	client := Client{
-		clientId:    clientId,
-		msgStore:    msgStore,
-		isConnected: false,
-		created:     time.Now(),
-		logger:      logger,
+func NewClient(clientId string, logger utils.Logger) *Client {
+	return &Client{
+		clientId: clientId,
+		created:  time.Now(),
+		logger:   logger,
 	}
-
-	return client
 }
 
-func (c Client) Id() string {
+func (c *Client) Id() string {
 	return c.clientId
 }
 
@@ -78,8 +64,6 @@ func (c *Client) Connect(timeout int, interval int, responseMsg Message, connect
 
 	c.lastSession = NewSession(c, connection, timeout, responseMsg, c.logger)
 	c.responseMsg = responseMsg
-
-	c.flushMsgs()
 }
 
 func (c *Client) SetConnection(connection Connection) {
@@ -88,29 +72,16 @@ func (c *Client) SetConnection(connection Connection) {
 
 	if c.connection == nil || connection.Priority() > c.connection.Priority() {
 		c.connection = connection
-		c.isConnected = true
 	}
 }
 
-func (c Client) Queue(msg Message) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+func (c *Client) ShouldReap() bool {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
 
-	c.msgStore.EnqueueMessages([]Message{msg})
-	c.flushMsgs()
-}
-
-func (c Client) QueueMany(msgs []Message) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	c.msgStore.EnqueueMessages(msgs)
-	c.flushMsgs()
-}
-
-func (c Client) IsExpired() bool {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	if !c.connection.IsConnected() {
+		return true
+	}
 
 	if time.Now().Sub(c.created) > time.Duration(1*time.Minute) {
 		if c.lastSession != nil &&
@@ -121,30 +92,21 @@ func (c Client) IsExpired() bool {
 	return false
 }
 
-func (c Client) flushMsgs() {
-	if c.isConnected && c.connection != nil && c.connection.IsConnected() {
-		msgs := c.msgStore.GetAndClearMessages()
-		if len(msgs) > 0 {
+func (c *Client) Queue(msg Message) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	if c.connection != nil && c.connection.IsConnected() {
+		msgs := []Message{msg}
+		if c.connection.IsSingleShot() {
+			msgs = append(msgs, c.responseMsg)
+		}
+		c.logger.Debugf("Sending %d msgs to %s on %s", len(msgs), c.clientId, reflect.TypeOf(c.connection))
 
-			var msgsWithConnect []Message
-			if c.connection.IsSingleShot() {
-				msgsWithConnect = append(msgs, c.responseMsg)
+		err := c.connection.Send(msgs)
 
-			} else {
-				msgsWithConnect = msgs
-			}
-			c.logger.Debugf("Sending %d msgs to %s on %s", len(msgsWithConnect), c.clientId, reflect.TypeOf(c.connection))
-
-			err := c.connection.Send(msgsWithConnect)
-
-			// failed, so requeue
-			if err != nil {
-				c.logger.Debugf("Was unable to send to %s requeued %d messages", c.clientId, len(msgs))
-				c.msgStore.EnqueueMessages(msgs)
-			} else {
-				c.responseMsg = nil
-				c.isConnected = false
-			}
+		if err != nil {
+			c.logger.Debugf("Was unable to send to %s requeued %d messages", c.clientId, len(msgs))
+			c.connection.Close()
 		}
 	} else {
 		c.logger.Debugf("Not connected for %s", c.clientId)

@@ -1,14 +1,15 @@
 package memory
 
 import (
-	"github.com/roncohen/faye-go/utils"
 	"sync"
+
+	"github.com/roncohen/faye-go/utils"
 )
 
 type SubscriptionRegister struct {
 	clientByPattern  map[string]utils.StringSet
 	patternsByClient map[string]utils.StringSet
-	mutex            sync.RWMutex
+	mutex            sync.Mutex
 }
 
 func NewSubscriptionRegister() *SubscriptionRegister {
@@ -18,9 +19,9 @@ func NewSubscriptionRegister() *SubscriptionRegister {
 	}
 }
 
-func (sr SubscriptionRegister) AddSubscription(clientId string, patterns []string) {
-	sr.mutex.Lock()
+func (sr *SubscriptionRegister) AddSubscription(clientId string, patterns []string) {
 	defer sr.mutex.Unlock()
+	sr.mutex.Lock()
 	for _, pattern := range patterns {
 		_, ok := sr.clientByPattern[pattern]
 		if !ok {
@@ -36,7 +37,7 @@ func (sr SubscriptionRegister) AddSubscription(clientId string, patterns []strin
 	sr.patternsByClient[clientId].AddMany(patterns)
 }
 
-func (sr SubscriptionRegister) RemoveSubscription(clientId string, patterns []string) {
+func (sr *SubscriptionRegister) RemoveSubscription(clientId string, patterns []string) {
 	sr.mutex.Lock()
 	defer sr.mutex.Unlock()
 
@@ -47,10 +48,10 @@ func (sr SubscriptionRegister) RemoveSubscription(clientId string, patterns []st
 
 }
 
-func (sr SubscriptionRegister) GetClients(patterns []string) []string {
+func (sr *SubscriptionRegister) GetClients(patterns []string) []string {
 	StringSet := utils.NewStringSet()
-	sr.mutex.RLock()
-	defer sr.mutex.RUnlock()
+	sr.mutex.Lock()
+	defer sr.mutex.Unlock()
 
 	for _, pattern := range patterns {
 		StringSet.AddMany(sr.clientByPattern[pattern].GetAll())
@@ -58,7 +59,7 @@ func (sr SubscriptionRegister) GetClients(patterns []string) []string {
 	return StringSet.GetAll()
 }
 
-func (sr SubscriptionRegister) RemoveClient(clientId string) {
+func (sr *SubscriptionRegister) RemoveClient(clientId string) {
 	sr.mutex.Lock()
 	defer sr.mutex.Unlock()
 

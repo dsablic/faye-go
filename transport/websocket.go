@@ -1,10 +1,12 @@
 package transport
 
 import (
-	"github.com/gorilla/websocket"
-	"github.com/roncohen/faye-go/utils"
 	"io"
+	"sync"
+
+	"github.com/gorilla/websocket"
 	"github.com/roncohen/faye-go/protocol"
+	"github.com/roncohen/faye-go/utils"
 )
 
 const WebSocketConnectionPriority = 10
@@ -15,20 +17,25 @@ type Server interface {
 }
 
 type WebSocketConnection struct {
-	ws         *websocket.Conn
-	failedSend bool
+	ws     *websocket.Conn
+	failed bool
+	mutex  sync.RWMutex
 }
 
 func (wc *WebSocketConnection) Send(msgs []protocol.Message) error {
+	wc.mutex.Lock()
+	defer wc.mutex.Unlock()
 	err := wc.ws.WriteJSON(msgs)
 	if err != nil {
-		wc.failedSend = true
+		wc.failed = true
 	}
 	return err
 }
 
 func (wc *WebSocketConnection) IsConnected() bool {
-	return wc.failedSend
+	wc.mutex.RLock()
+	defer wc.mutex.RUnlock()
+	return !wc.failed
 }
 
 func (wc *WebSocketConnection) Close() {
@@ -46,10 +53,14 @@ func (lp WebSocketConnection) IsSingleShot() bool {
 func WebsocketServer(m Server) func(*websocket.Conn) {
 	return func(ws *websocket.Conn) {
 		var data interface{}
-		wsConn := WebSocketConnection{ws, true}
+		wsConn := WebSocketConnection{ws: ws, failed: false}
 		for {
 			err := ws.ReadJSON(&data)
 			if err != nil {
+				wsConn.mutex.Lock()
+				wsConn.failed = true
+				wsConn.mutex.Unlock()
+				ws.Close()
 				if err == io.EOF {
 					m.Logger().Debugf("EOF while reading from socket")
 					return
@@ -60,7 +71,9 @@ func WebsocketServer(m Server) func(*websocket.Conn) {
 			}
 
 			if arr := data.([]interface{}); len(arr) == 0 {
+				wsConn.mutex.Lock()
 				ws.WriteJSON([]string{})
+				wsConn.mutex.Unlock()
 			} else {
 				m.HandleRequest(data, &wsConn)
 			}
