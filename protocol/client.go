@@ -29,7 +29,7 @@ func NewSession(client *Client, conn Connection, timeout int, response Message, 
 }
 
 func (s *Session) End() {
-	if s.conn.IsConnected() {
+	if s.client.isConnected() {
 		s.conn.Send([]Message{s.response})
 	} else {
 		s.logger.Debugf("No longer connected %s", s.client.clientId)
@@ -76,12 +76,12 @@ func (c *Client) SetConnection(connection Connection) {
 }
 
 func (c *Client) ShouldReap() bool {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	if !c.connection.IsConnected() {
+	if !c.isConnected() {
 		return true
 	}
+
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
 
 	if time.Now().Sub(c.created) > time.Duration(1*time.Minute) {
 		if c.lastSession != nil &&
@@ -93,9 +93,9 @@ func (c *Client) ShouldReap() bool {
 }
 
 func (c *Client) Queue(msg Message) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	if c.connection != nil && c.connection.IsConnected() {
+	if c.isConnected() {
+		c.mutex.Lock()
+		defer c.mutex.Unlock()
 		msgs := []Message{msg}
 		if c.connection.IsSingleShot() {
 			msgs = append(msgs, c.responseMsg)
@@ -111,4 +111,10 @@ func (c *Client) Queue(msg Message) {
 	} else {
 		c.logger.Debugf("Not connected for %s", c.clientId)
 	}
+}
+
+func (c *Client) isConnected() bool {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	return c.connection != nil && c.connection.IsConnected()
 }
