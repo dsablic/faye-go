@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/roncohen/faye-go/memory"
-	. "github.com/roncohen/faye-go/protocol"
+	"github.com/dsablic/faye-go/memory"
+	. "github.com/dsablic/faye-go/protocol"
 	"github.com/satori/go.uuid"
 )
 

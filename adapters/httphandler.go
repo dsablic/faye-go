@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
-	"github.com/roncohen/faye-go"
-	"github.com/roncohen/faye-go/transport"
+	"github.com/dsablic/faye-go"
+	"github.com/dsablic/faye-go/transport"
 )
 
 /* HTTP handler that can be dropped into the standard http handlers list */

@@ -5,9 +5,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/roncohen/faye-go/memory"
-	"github.com/roncohen/faye-go/protocol"
-	"github.com/roncohen/faye-go/utils"
+	"github.com/dsablic/faye-go/memory"
+	"github.com/dsablic/faye-go/protocol"
+	"github.com/dsablic/faye-go/utils"
 	"github.com/satori/go.uuid"
 )
 
