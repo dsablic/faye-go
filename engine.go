@@ -11,21 +11,30 @@ import (
 	"github.com/satori/go.uuid"
 )
 
+type messageCounters struct {
+	published uint
+	sent      uint
+}
+
 type Engine struct {
-	clients  *memory.ClientRegister
-	register *memory.SubscriptionRegister
-	logger   utils.Logger
-	ticker   *time.Ticker
-	quit     chan struct{}
+	clients      *memory.ClientRegister
+	register     *memory.SubscriptionRegister
+	logger       utils.Logger
+	counters     messageCounters
+	reapInterval time.Duration
+	ticker       *time.Ticker
+	quit         chan struct{}
 }
 
 func NewEngine(logger utils.Logger, reapInterval time.Duration) *Engine {
 	engine := &Engine{
-		clients:  memory.NewClientRegister(logger),
-		register: memory.NewSubscriptionRegister(),
-		logger:   logger,
-		ticker:   time.NewTicker(reapInterval),
-		quit:     make(chan struct{}),
+		clients:      memory.NewClientRegister(),
+		register:     memory.NewSubscriptionRegister(),
+		counters:     messageCounters{0, 0},
+		logger:       logger,
+		reapInterval: reapInterval,
+		ticker:       time.NewTicker(reapInterval),
+		quit:         make(chan struct{}),
 	}
 	go engine.reap()
 	return engine
@@ -110,6 +119,8 @@ func (m *Engine) Publish(request protocol.Message) {
 			msg.SetClientId(request.ClientId())
 
 			recipients := m.register.GetClients(channel.Expand())
+			m.counters.published++
+			m.counters.sent += uint(len(recipients))
 			m.logger.Debugf("PUBLISH from %s on %s to %d recipients", request.ClientId(), channel, len(recipients))
 			for _, c := range recipients {
 				m.clients.GetClient(c).Queue(msg)
@@ -148,7 +159,6 @@ func (m *Engine) Handshake(request protocol.Message, conn protocol.Connection) s
 		response["error"] = fmt.Sprintf("Only supported version is '%s'", protocol.BAYEUX_VERSION)
 	}
 
-	// Answer directly
 	conn.Send([]protocol.Message{response})
 	return newClientId
 }
@@ -157,10 +167,11 @@ func (m *Engine) reap() {
 	for {
 		select {
 		case <-m.ticker.C:
-			for _, id := range m.clients.Reap(func(id string) { m.register.RemoveClient(id) }) {
+			clientsCount := m.clients.Reap(func(id string) {
 				m.logger.Debugf("Reaping client %s", id)
-			}
-			m.logStats()
+				m.register.RemoveClient(id)
+			})
+			m.logStats(clientsCount)
 		case <-m.quit:
 			m.ticker.Stop()
 			return
@@ -168,11 +179,13 @@ func (m *Engine) reap() {
 	}
 }
 
-func (m *Engine) logStats() {
+func (m *Engine) logStats(clientsCount int) {
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
-	m.logger.Infof("Clients = %v, Alloc = %v, TotalAlloc = %v, nSys = %v, nNumGC = %v",
-		m.clients.Count(), ms.Alloc/1024, ms.TotalAlloc/1024, ms.Sys/1024, ms.NumGC)
+	interval := uint(m.reapInterval.Seconds())
+	m.logger.Infof("Clients = %v, Publishing = %v/s, Sending = %v/s, Alloc = %v, TotalAlloc = %v, nSys = %v, nNumGC = %v",
+		clientsCount, m.counters.published/interval, m.counters.sent/interval, ms.Alloc/1024, ms.TotalAlloc/1024, ms.Sys/1024, ms.NumGC)
+	m.counters = messageCounters{0, 0}
 }
 
 func (m *Engine) responseFromRequest(request protocol.Message) protocol.Message {
