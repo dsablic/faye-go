@@ -52,7 +52,7 @@ func (m *Engine) NewClient(conn protocol.Connection) *protocol.Client {
 	return newClient
 }
 
-func (m *Engine) Connect(request protocol.Message, client *protocol.Client, conn protocol.Connection) {
+func (m *Engine) Connect(request *protocol.Message, client *protocol.Client, conn protocol.Connection) {
 	response := m.responseFromRequest(request)
 	response["successful"] = true
 
@@ -64,11 +64,11 @@ func (m *Engine) Connect(request protocol.Message, client *protocol.Client, conn
 	client.Connect(timeout, 0, response, conn)
 }
 
-func (m *Engine) SubscribeClient(request protocol.Message, client *protocol.Client) {
+func (m *Engine) SubscribeClient(request *protocol.Message, client *protocol.Client) {
 	response := m.responseFromRequest(request)
 	response["successful"] = true
 
-	subscription := request["subscription"]
+	subscription := (*request)["subscription"]
 	response["subscription"] = subscription
 
 	var subs []string
@@ -90,19 +90,19 @@ func (m *Engine) SubscribeClient(request protocol.Message, client *protocol.Clie
 	client.Queue(response)
 }
 
-func (m *Engine) Disconnect(request protocol.Message, client *protocol.Client, conn protocol.Connection) {
+func (m *Engine) Disconnect(request *protocol.Message, client *protocol.Client, conn protocol.Connection) {
 	response := m.responseFromRequest(request)
 	response["successful"] = true
 	clientId := request.ClientId()
 	m.logger.Debugf("Client %s disconnected", clientId)
 }
 
-func (m *Engine) Publish(request protocol.Message, conn protocol.Connection) {
+func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
 	requestingClient := m.clients.GetClient(request.ClientId())
 
 	response := m.responseFromRequest(request)
 	response["successful"] = true
-	data := request["data"]
+	data := (*request)["data"]
 	channel := request.Channel()
 
 	if requestingClient == nil {
@@ -130,9 +130,9 @@ func (m *Engine) Publish(request protocol.Message, conn protocol.Connection) {
 	}()
 }
 
-func (m *Engine) Handshake(request protocol.Message, conn protocol.Connection) string {
+func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) string {
 	newClientId := ""
-	version := request["version"].(string)
+	version := (*request)["version"].(string)
 
 	response := m.responseFromRequest(request)
 	response["successful"] = false
@@ -182,10 +182,10 @@ func (m *Engine) logStats(clientsCount int) {
 	m.counters = messageCounters{0, 0}
 }
 
-func (m *Engine) responseFromRequest(request protocol.Message) protocol.Message {
+func (m *Engine) responseFromRequest(request *protocol.Message) protocol.Message {
 	response := protocol.Message{}
 	response["channel"] = request.Channel().Name()
-	if reqId, ok := request["id"]; ok {
+	if reqId, ok := (*request)["id"]; ok {
 		response["id"] = reqId.(string)
 	}
 

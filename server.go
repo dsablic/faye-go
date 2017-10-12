@@ -27,31 +27,32 @@ func (s *Server) HandleRequest(msges interface{}, conn protocol.Connection) {
 	case []interface{}:
 		msg_list := msges.([]interface{})
 		for _, msg := range msg_list {
-			s.handleMessage(msg.(map[string]interface{}), conn)
+			var m protocol.Message = msg.(map[string]interface{})
+			s.handleMessage(&m, conn)
 		}
 	case map[string]interface{}:
-		m := msges.(map[string]interface{})
+		var m protocol.Message = msges.(map[string]interface{})
 		if nested, ok := m["message"]; ok {
 			m = nested.(map[string]interface{})
 		}
-		s.handleMessage(m, conn)
+		s.handleMessage(&m, conn)
 	default:
 		s.logger.Warnf("Invalid message %v", msges)
 		s.respondWithError(conn, "Invalid message")
 	}
 }
 
-func (s *Server) getClient(request protocol.Message, conn protocol.Connection) *protocol.Client {
+func (s *Server) getClient(request *protocol.Message, conn protocol.Connection) *protocol.Client {
 	clientId := request.ClientId()
 	return s.engine.GetClient(clientId)
 }
 
-func (s *Server) handleMessage(msg protocol.Message, conn protocol.Connection) {
+func (s *Server) handleMessage(msg *protocol.Message, conn protocol.Connection) {
 	channel := msg.Channel()
 	if channel.IsMeta() {
 		s.handleMeta(msg, conn)
 	} else {
-		if s.publishValid(&msg, s.getClient(msg, conn)) {
+		if s.publishValid(msg, s.getClient(msg, conn)) {
 			s.engine.Publish(msg, conn)
 		} else {
 			s.logger.Warnf("Invalid publish %v", msg)
@@ -60,7 +61,7 @@ func (s *Server) handleMessage(msg protocol.Message, conn protocol.Connection) {
 	}
 }
 
-func (s *Server) handleMeta(msg protocol.Message, conn protocol.Connection) protocol.Message {
+func (s *Server) handleMeta(msg *protocol.Message, conn protocol.Connection) protocol.Message {
 	meta_channel := msg.Channel().MetaType()
 
 	if meta_channel == protocol.META_HANDSHAKE_CHANNEL {
@@ -80,7 +81,7 @@ func (s *Server) handleMeta(msg protocol.Message, conn protocol.Connection) prot
 				s.engine.Disconnect(msg, client, conn)
 
 			case protocol.META_SUBSCRIBE_CHANNEL:
-				if s.subscribeValid(&msg, client) {
+				if s.subscribeValid(msg, client) {
 					s.engine.SubscribeClient(msg, client)
 				} else {
 					s.logger.Warnf("Invalid subscription %v", msg)
@@ -91,7 +92,7 @@ func (s *Server) handleMeta(msg protocol.Message, conn protocol.Connection) prot
 			}
 		} else {
 			s.logger.Warnf("Message %v from unknown client %v", msg.Channel(), msg.ClientId())
-			response := msg
+			response := *msg
 			response["successful"] = false
 			response["advice"] = protocol.DEFAULT_ADVICE
 			conn.Send([]protocol.Message{response})

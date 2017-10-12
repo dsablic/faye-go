@@ -42,11 +42,11 @@ func (wc *WebSocketConnection) Close() {
 	wc.ws.Close()
 }
 
-func (wc WebSocketConnection) Priority() int {
+func (wc *WebSocketConnection) Priority() int {
 	return WebSocketConnectionPriority
 }
 
-func (lp WebSocketConnection) IsSingleShot() bool {
+func (wc *WebSocketConnection) IsSingleShot() bool {
 	return false
 }
 
