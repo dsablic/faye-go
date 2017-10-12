@@ -97,43 +97,37 @@ func (m *Engine) Disconnect(request protocol.Message, client *protocol.Client, c
 	m.logger.Debugf("Client %s disconnected", clientId)
 }
 
-func (m *Engine) Publish(request protocol.Message) {
+func (m *Engine) Publish(request protocol.Message, conn protocol.Connection) {
 	requestingClient := m.clients.GetClient(request.ClientId())
 
+	response := m.responseFromRequest(request)
+	response["successful"] = true
+	data := request["data"]
+	channel := request.Channel()
+
 	if requestingClient == nil {
-		m.logger.Warnf("PUBLISH from unknown client %s", request)
+		conn.Send([]protocol.Message{response})
+		conn.Close()
 	} else {
-		response := m.responseFromRequest(request)
-		response["successful"] = true
-		data := request["data"]
-		channel := request.Channel()
-
-		m.clients.GetClient(request.ClientId()).Queue(response)
-
-		go func() {
-			msg := protocol.Message{}
-			msg["channel"] = channel.Name()
-			msg["data"] = data
-			// TODO: Missing ID
-
-			msg.SetClientId(request.ClientId())
-
-			recipients := m.register.GetClients(channel.Expand())
-			m.counters.published++
-			m.counters.sent += uint(len(recipients))
-			m.logger.Debugf("PUBLISH from %s on %s to %d recipients", request.ClientId(), channel, len(recipients))
-			for _, c := range recipients {
-				m.clients.GetClient(c).Queue(msg)
-			}
-		}()
+		requestingClient.Queue(response)
 	}
-}
 
-// Publish message directly to client
-// msg should have "channel" which the client is expecting, e.g. "/service/echo"
-func (m *Engine) PublishFromService(recipientId string, msg protocol.Message) {
-	// response["successful"] = true
-	m.clients.GetClient(recipientId).Queue(msg)
+	go func() {
+		msg := protocol.Message{}
+		msg["channel"] = channel.Name()
+		msg["data"] = data
+		// TODO: Missing ID
+
+		msg.SetClientId(request.ClientId())
+
+		recipients := m.register.GetClients(channel.Expand())
+		m.counters.published++
+		m.counters.sent += uint(len(recipients))
+		m.logger.Debugf("PUBLISH from %s on %s to %d recipients", request.ClientId(), channel, len(recipients))
+		for _, c := range recipients {
+			m.clients.GetClient(c).Queue(msg)
+		}
+	}()
 }
 
 func (m *Engine) Handshake(request protocol.Message, conn protocol.Connection) string {
@@ -146,7 +140,7 @@ func (m *Engine) Handshake(request protocol.Message, conn protocol.Connection) s
 	if version == protocol.BAYEUX_VERSION {
 		newClientId = m.NewClient(conn).Id()
 
-		response.Update(map[string]interface{}{
+		response.Update(protocol.Message{
 			"clientId":                 newClientId,
 			"channel":                  protocol.META_PREFIX + protocol.META_HANDSHAKE_CHANNEL,
 			"version":                  protocol.BAYEUX_VERSION,

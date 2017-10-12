@@ -2,8 +2,9 @@ package transport
 
 import (
 	"encoding/json"
-	"github.com/dsablic/faye-go/protocol"
 	"net/http"
+
+	"github.com/dsablic/faye-go/protocol"
 )
 
 const LongPollingConnectionPriority = 1

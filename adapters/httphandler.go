@@ -2,15 +2,13 @@ package adapters
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
-	"github.com/gorilla/websocket"
 	"github.com/dsablic/faye-go"
 	"github.com/dsablic/faye-go/transport"
+	"github.com/gorilla/websocket"
 )
 
-/* HTTP handler that can be dropped into the standard http handlers list */
 func FayeHandler(server *faye.Server) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Upgrade") == "websocket" {
@@ -20,7 +18,7 @@ func FayeHandler(server *faye.Server) http.Handler {
 				http.Error(w, "Not a websocket handshake", 400)
 				return
 			} else if err != nil {
-				log.Println(err)
+				server.Logger().Errorf("Websocket upgrade error: %s", err)
 				return
 			}
 
@@ -32,7 +30,7 @@ func FayeHandler(server *faye.Server) http.Handler {
 				if err := dec.Decode(&v); err == nil {
 					transport.MakeLongPoll(v, server, w)
 				} else {
-					log.Fatal(err)
+					server.Logger().Errorf("%v", r)
 				}
 			}
 		}
