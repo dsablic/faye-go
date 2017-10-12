@@ -7,15 +7,15 @@ import (
 )
 
 type SubscriptionRegister struct {
-	clientByPattern  map[string]utils.StringSet
-	patternsByClient map[string]utils.StringSet
-	mutex            sync.Mutex
+	clientByPattern  map[string]*utils.StringSet
+	patternsByClient map[string]*utils.StringSet
+	mutex            sync.RWMutex
 }
 
 func NewSubscriptionRegister() *SubscriptionRegister {
 	return &SubscriptionRegister{
-		clientByPattern:  make(map[string]utils.StringSet),
-		patternsByClient: make(map[string]utils.StringSet),
+		clientByPattern:  make(map[string]*utils.StringSet),
+		patternsByClient: make(map[string]*utils.StringSet),
 	}
 }
 
@@ -49,14 +49,16 @@ func (sr *SubscriptionRegister) RemoveSubscription(clientId string, patterns []s
 }
 
 func (sr *SubscriptionRegister) GetClients(patterns []string) []string {
-	StringSet := utils.NewStringSet()
-	sr.mutex.Lock()
-	defer sr.mutex.Unlock()
+	set := utils.NewStringSet()
+	sr.mutex.RLock()
+	defer sr.mutex.RUnlock()
 
 	for _, pattern := range patterns {
-		StringSet.AddMany(sr.clientByPattern[pattern].GetAll())
+		if s := sr.clientByPattern[pattern]; s != nil {
+			set.AddMany(s.GetAll())
+		}
 	}
-	return StringSet.GetAll()
+	return set.GetAll()
 }
 
 func (sr *SubscriptionRegister) RemoveClient(clientId string) {

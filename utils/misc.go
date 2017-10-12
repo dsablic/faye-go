@@ -1,12 +1,7 @@
 package utils
 
-import (
-	"log"
-)
-
 func CompareStringSlices(a, b []string) bool {
 	if len(a) != len(b) {
-		log.Print("Slices are not of equal length")
 		return false
 	}
 
@@ -22,30 +17,30 @@ type StringSet struct {
 	values map[string]bool
 }
 
-func NewStringSet() StringSet {
-	return StringSet{make(map[string]bool)}
+func NewStringSet() *StringSet {
+	return &StringSet{make(map[string]bool)}
 }
 
-func (c StringSet) Add(value string) {
+func (c *StringSet) Add(value string) {
 	c.values[value] = true
 }
 
-func (c StringSet) AddMany(values []string) {
+func (c *StringSet) AddMany(values []string) {
 	for _, value := range values {
 		c.values[value] = true
 	}
 }
 
-func (c StringSet) Remove(value string) {
+func (c *StringSet) Remove(value string) {
 	delete(c.values, value)
 }
 
-func (c StringSet) Has(value string) bool {
+func (c *StringSet) Has(value string) bool {
 	_, ok := c.values[value]
 	return ok
 }
 
-func (c StringSet) GetAll() []string {
+func (c *StringSet) GetAll() []string {
 	all := make([]string, len(c.values))
 	i := 0
 	for k := range c.values {
