@@ -125,7 +125,9 @@ func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
 		m.counters.sent += uint(len(recipients))
 		m.logger.Debugf("PUBLISH from %s on %s to %d recipients", request.ClientId(), channel, len(recipients))
 		for _, c := range recipients {
-			m.clients.GetClient(c).Queue(msg)
+			if client := m.clients.GetClient(c); client != nil {
+				client.Queue(msg)
+			}
 		}
 	}()
 }
