@@ -65,8 +65,10 @@ func (sr *SubscriptionRegister) RemoveClient(clientId string) {
 	sr.mutex.Lock()
 	defer sr.mutex.Unlock()
 
-	for _, pattern := range sr.patternsByClient[clientId].GetAll() {
-		sr.clientByPattern[pattern].Remove(clientId)
+	if s := sr.patternsByClient[clientId]; s != nil {
+		for _, pattern := range s.GetAll() {
+			sr.clientByPattern[pattern].Remove(clientId)
+		}
+		delete(sr.patternsByClient, clientId)
 	}
-	delete(sr.patternsByClient, clientId)
 }
