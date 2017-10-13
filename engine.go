@@ -147,7 +147,7 @@ func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) 
 			"channel":                  protocol.META_PREFIX + protocol.META_HANDSHAKE_CHANNEL,
 			"version":                  protocol.BAYEUX_VERSION,
 			"advice":                   protocol.DEFAULT_ADVICE,
-			"supportedConnectionTypes": []string{"websocket", "long-polling"},
+			"supportedConnectionTypes": []string{"websocket"},
 			"successful":               true,
 		})
 

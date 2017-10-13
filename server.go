@@ -94,7 +94,7 @@ func (s *Server) handleMeta(msg *protocol.Message, conn protocol.Connection) pro
 			s.logger.Warnf("Message %v from unknown client %v", msg.Channel(), msg.ClientId())
 			response := *msg
 			response["successful"] = false
-			response["advice"] = protocol.DEFAULT_ADVICE
+			response["advice"] = map[string]interface{}{"reconnect": "handshake", "interval": 1000}
 			conn.Send([]protocol.Message{response})
 			conn.Close()
 		}

@@ -64,10 +64,9 @@ func WebsocketServer(m Server) func(*websocket.Conn) {
 				if err == io.EOF {
 					m.Logger().Debugf("EOF while reading from socket")
 					return
-				} else {
-					m.Logger().Debugf("While reading from socket: %s", err)
-					return
 				}
+				m.Logger().Debugf("While reading from socket: %s", err)
+				return
 			}
 
 			if arr := data.([]interface{}); len(arr) == 0 {
