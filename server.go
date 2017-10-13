@@ -5,7 +5,7 @@ import (
 	"github.com/dsablic/faye-go/utils"
 )
 
-type validator func(*protocol.Message, *protocol.Client) bool
+type validator func(*protocol.Message) bool
 
 type Server struct {
 	engine         *Engine
@@ -52,7 +52,7 @@ func (s *Server) handleMessage(msg *protocol.Message, conn protocol.Connection) 
 	if channel.IsMeta() {
 		s.handleMeta(msg, conn)
 	} else {
-		if s.publishValid(msg, s.getClient(msg, conn)) {
+		if s.publishValid(msg) {
 			s.engine.Publish(msg, conn)
 		} else {
 			s.logger.Warnf("Invalid publish %v", msg)
@@ -81,7 +81,7 @@ func (s *Server) handleMeta(msg *protocol.Message, conn protocol.Connection) pro
 				s.engine.Disconnect(msg, client, conn)
 
 			case protocol.META_SUBSCRIBE_CHANNEL:
-				if s.subscribeValid(msg, client) {
+				if s.subscribeValid(msg) {
 					s.engine.SubscribeClient(msg, client)
 				} else {
 					s.logger.Warnf("Invalid subscription %v", msg)
