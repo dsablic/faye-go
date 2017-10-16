@@ -92,7 +92,7 @@ func (c *Client) ShouldReap() bool {
 	return false
 }
 
-func (c *Client) Queue(msg Message) {
+func (c *Client) Send(msg Message) bool {
 	if c.isConnected() {
 		c.mutex.Lock()
 		defer c.mutex.Unlock()
@@ -107,10 +107,15 @@ func (c *Client) Queue(msg Message) {
 		if err != nil {
 			c.logger.Debugf("Was unable to send to %s requeued %d messages", c.clientId, len(msgs))
 			c.connection.Close()
+			return false
 		}
-	} else {
-		c.logger.Debugf("Not connected for %s", c.clientId)
+
+		return true
 	}
+
+	c.logger.Debugf("Not connected for %s", c.clientId)
+
+	return true
 }
 
 func (c *Client) isConnected() bool {

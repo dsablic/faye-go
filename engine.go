@@ -2,7 +2,6 @@ package faye
 
 import (
 	"fmt"
-	"runtime"
 	"time"
 
 	"github.com/dsablic/faye-go/memory"
@@ -11,16 +10,19 @@ import (
 	"github.com/satori/go.uuid"
 )
 
-type messageCounters struct {
-	published uint
-	sent      uint
+type Counters struct {
+	Published uint
+	Sent      uint
+	Clients   uint
+	Failed    uint
 }
 
 type Engine struct {
 	clients      *memory.ClientRegister
 	register     *memory.SubscriptionRegister
 	logger       utils.Logger
-	counters     messageCounters
+	counters     Counters
+	Statistics   chan Counters
 	reapInterval time.Duration
 	ticker       *time.Ticker
 	quit         chan struct{}
@@ -30,8 +32,9 @@ func NewEngine(logger utils.Logger, reapInterval time.Duration) *Engine {
 	engine := &Engine{
 		clients:      memory.NewClientRegister(),
 		register:     memory.NewSubscriptionRegister(),
-		counters:     messageCounters{0, 0},
+		counters:     Counters{0, 0, 0, 0},
 		logger:       logger,
+		Statistics:   make(chan Counters),
 		reapInterval: reapInterval,
 		ticker:       time.NewTicker(reapInterval),
 		quit:         make(chan struct{}),
@@ -87,7 +90,7 @@ func (m *Engine) SubscribeClient(request *protocol.Message, client *protocol.Cli
 		}
 	}
 
-	client.Queue(response)
+	client.Send(response)
 }
 
 func (m *Engine) Disconnect(request *protocol.Message, client *protocol.Client, conn protocol.Connection) {
@@ -109,7 +112,7 @@ func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
 		conn.Send([]protocol.Message{response})
 		conn.Close()
 	} else {
-		requestingClient.Queue(response)
+		requestingClient.Send(response)
 	}
 
 	go func() {
@@ -121,12 +124,15 @@ func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
 		msg.SetClientId(request.ClientId())
 
 		recipients := m.register.GetClients(channel.Expand())
-		m.counters.published++
-		m.counters.sent += uint(len(recipients))
+		m.counters.Published++
 		m.logger.Debugf("PUBLISH from %s on %s to %d recipients", request.ClientId(), channel, len(recipients))
 		for _, c := range recipients {
 			if client := m.clients.GetClient(c); client != nil {
-				client.Queue(msg)
+				if client.Send(msg) {
+					m.counters.Sent++
+				} else {
+					m.counters.Failed++
+				}
 			}
 		}
 	}()
@@ -163,25 +169,17 @@ func (m *Engine) reap() {
 	for {
 		select {
 		case <-m.ticker.C:
-			clientsCount := m.clients.Reap(func(id string) {
+			m.counters.Clients = uint(m.clients.Reap(func(id string) {
 				m.logger.Debugf("Reaping client %s", id)
 				m.register.RemoveClient(id)
-			})
-			m.logStats(clientsCount)
+			}))
+			m.Statistics <- m.counters
+			m.counters = Counters{0, 0, 0, 0}
 		case <-m.quit:
 			m.ticker.Stop()
 			return
 		}
 	}
-}
-
-func (m *Engine) logStats(clientsCount int) {
-	var ms runtime.MemStats
-	runtime.ReadMemStats(&ms)
-	interval := uint(m.reapInterval.Seconds())
-	m.logger.Infof("Clients = %v, Publishing = %v/s, Sending = %v/s, Alloc = %v, TotalAlloc = %v, nSys = %v, nNumGC = %v",
-		clientsCount, m.counters.published/interval, m.counters.sent/interval, ms.Alloc/1024, ms.TotalAlloc/1024, ms.Sys/1024, ms.NumGC)
-	m.counters = messageCounters{0, 0}
 }
 
 func (m *Engine) responseFromRequest(request *protocol.Message) protocol.Message {

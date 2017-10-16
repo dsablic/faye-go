@@ -5,21 +5,23 @@ import (
 	"github.com/dsablic/faye-go/utils"
 )
 
-type validator func(*protocol.Message) bool
+type Validator interface {
+	SubscribeValid(*protocol.Message) bool
+	PublishValid(*protocol.Message) bool
+}
 
 type Server struct {
-	engine         *Engine
-	logger         utils.Logger
-	subscribeValid validator
-	publishValid   validator
+	engine    *Engine
+	logger    utils.Logger
+	validator Validator
 }
 
 func (s *Server) Logger() utils.Logger {
 	return s.logger
 }
 
-func NewServer(logger utils.Logger, engine *Engine, subscribe, publish validator) *Server {
-	return &Server{engine, logger, subscribe, publish}
+func NewServer(logger utils.Logger, engine *Engine, validator Validator) *Server {
+	return &Server{engine, logger, validator}
 }
 
 func (s *Server) HandleRequest(msges interface{}, conn protocol.Connection) {
@@ -52,7 +54,7 @@ func (s *Server) handleMessage(msg *protocol.Message, conn protocol.Connection) 
 	if channel.IsMeta() {
 		s.handleMeta(msg, conn)
 	} else {
-		if s.publishValid(msg) {
+		if s.validator.PublishValid(msg) {
 			s.engine.Publish(msg, conn)
 		} else {
 			s.logger.Warnf("Invalid publish %v", msg)
@@ -81,7 +83,7 @@ func (s *Server) handleMeta(msg *protocol.Message, conn protocol.Connection) pro
 				s.engine.Disconnect(msg, client, conn)
 
 			case protocol.META_SUBSCRIBE_CHANNEL:
-				if s.subscribeValid(msg) {
+				if s.validator.SubscribeValid(msg) {
 					s.engine.SubscribeClient(msg, client)
 				} else {
 					s.logger.Warnf("Invalid subscription %v", msg)
