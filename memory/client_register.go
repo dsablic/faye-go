@@ -33,6 +33,14 @@ func (cr *ClientRegister) GetClient(clientId string) *protocol.Client {
 	return nil
 }
 
+func (cr *ClientRegister) Publish(msg protocol.Message) {
+	cr.mutex.RLock()
+	defer cr.mutex.RUnlock()
+	for _, c := range cr.clients {
+		c.Messages <- msg
+	}
+}
+
 func (cr *ClientRegister) Reap() uint {
 	cr.mutex.RLock()
 	dead := []string{}
@@ -46,6 +54,7 @@ func (cr *ClientRegister) Reap() uint {
 	if len(dead) > 0 {
 		cr.mutex.Lock()
 		for _, id := range dead {
+			cr.clients[id].Release()
 			delete(cr.clients, id)
 		}
 		cr.mutex.Unlock()

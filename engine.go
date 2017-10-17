@@ -22,7 +22,7 @@ type Engine struct {
 	clients      *memory.ClientRegister
 	logger       utils.Logger
 	counters     Counters
-	channels     protocol.ClientChannels
+	channels     protocol.CounterChannels
 	reapInterval time.Duration
 	ticker       *time.Ticker
 }
@@ -33,10 +33,9 @@ func NewEngine(logger utils.Logger, reapInterval time.Duration) *Engine {
 		clients:    memory.NewClientRegister(),
 		counters:   Counters{0, 0, 0, 0},
 		logger:     logger,
-		channels: protocol.ClientChannels{
-			Messages: make(chan protocol.Message),
-			Failed:   make(chan uint),
-			Sent:     make(chan uint),
+		channels: protocol.CounterChannels{
+			Failed: make(chan uint),
+			Sent:   make(chan uint),
 		},
 		reapInterval: reapInterval,
 		ticker:       time.NewTicker(reapInterval),
@@ -121,7 +120,7 @@ func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
 	// TODO: Missing ID
 	msg.SetClientId(request.ClientId())
 	m.logger.Debugf("PUBLISH from %s on %s", request.ClientId(), channel)
-	m.channels.Messages <- msg
+	m.clients.Publish(msg)
 	m.counters.Published++
 }
 

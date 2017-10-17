@@ -36,21 +36,22 @@ func (s *Session) End() {
 	}
 }
 
-type ClientChannels struct {
-	Messages chan Message
-	Failed   chan uint
-	Sent     chan uint
+type CounterChannels struct {
+	Failed chan uint
+	Sent   chan uint
 }
 
 type Client struct {
-	subscriptions *utils.StringSet
 	clientId      string
+	subscriptions *utils.StringSet
+	Messages      chan Message
 	connection    Connection
 	responseMsg   Message
 	mutex         sync.RWMutex
 	lastSession   *Session
 	created       time.Time
 	logger        utils.Logger
+	quit          chan bool
 }
 
 func NewClient(clientId string, logger utils.Logger) *Client {
@@ -59,6 +60,8 @@ func NewClient(clientId string, logger utils.Logger) *Client {
 		clientId:      clientId,
 		created:       time.Now(),
 		logger:        logger,
+		Messages:      make(chan Message),
+		quit:          make(chan bool),
 	}
 }
 
@@ -66,27 +69,36 @@ func (c *Client) Id() string {
 	return c.clientId
 }
 
-func (c *Client) Connect(timeout int, interval int, responseMsg Message, connection Connection, channels *ClientChannels) {
+func (c *Client) Connect(timeout int, interval int, responseMsg Message, connection Connection, ch *CounterChannels) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	c.lastSession = NewSession(c, connection, timeout, responseMsg, c.logger)
 	c.responseMsg = responseMsg
-	go func(ch *ClientChannels) {
-		for m := range ch.Messages {
-			if c.ShouldReap() {
-				c.logger.Debugf("Releasing client %s", c.clientId)
+	go func() {
+		for {
+			select {
+			case m := <-c.Messages:
+				{
+					if c.isSubscribed(m.Channel().Expand()) {
+						if c.Send(m) {
+							ch.Sent <- 1
+						} else {
+							ch.Failed <- 1
+						}
+					}
+				}
+			case <-c.quit:
 				return
 			}
-			if c.isSubscribed(m.Channel().Expand()) {
-				if c.Send(m) {
-					ch.Sent <- 1
-				} else {
-					ch.Failed <- 1
-				}
-			}
 		}
-	}(channels)
+	}()
+}
+
+func (c *Client) Release() {
+	defer c.mutex.RUnlock()
+	c.mutex.RLock()
+	c.quit <- true
 }
 
 func (c *Client) SetConnection(connection Connection) {
@@ -115,32 +127,6 @@ func (c *Client) ShouldReap() bool {
 	return false
 }
 
-func (c *Client) Send(msg Message) bool {
-	if c.isConnected() {
-		c.mutex.Lock()
-		defer c.mutex.Unlock()
-		msgs := []Message{msg}
-		if c.connection.IsSingleShot() {
-			msgs = append(msgs, c.responseMsg)
-		}
-		c.logger.Debugf("Sending %d msgs to %s on %s", len(msgs), c.clientId, reflect.TypeOf(c.connection))
-
-		err := c.connection.Send(msgs)
-
-		if err != nil {
-			c.logger.Debugf("Was unable to send to %s requeued %d messages", c.clientId, len(msgs))
-			c.connection.Close()
-			return false
-		}
-
-		return true
-	}
-
-	c.logger.Debugf("Not connected for %s", c.clientId)
-
-	return true
-}
-
 func (c *Client) AddSubscriptions(patterns []string) {
 	c.logger.Infof("SUBSCRIBE %s subscription: %v", c.clientId, patterns)
 	defer c.mutex.RUnlock()
@@ -163,4 +149,29 @@ func (c *Client) isSubscribed(patterns []string) bool {
 		}
 	}
 	return false
+}
+
+func (c *Client) Send(msg Message) bool {
+	if c.isConnected() {
+		c.mutex.Lock()
+		defer c.mutex.Unlock()
+		msgs := []Message{msg}
+		if c.connection.IsSingleShot() {
+			msgs = append(msgs, c.responseMsg)
+		}
+		c.logger.Debugf("Sending %d msgs to %s on %s", len(msgs), c.clientId, reflect.TypeOf(c.connection))
+
+		err := c.connection.Send(msgs)
+
+		if err != nil {
+			c.logger.Debugf("Was unable to send to %s requeued %d messages", c.clientId, len(msgs))
+			c.connection.Close()
+			return false
+		}
+
+		return true
+	}
+
+	c.logger.Debugf("Not connected for %s", c.clientId)
+	return true
 }
