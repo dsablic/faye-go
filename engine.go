@@ -25,7 +25,6 @@ type Engine struct {
 	Statistics   chan Counters
 	reapInterval time.Duration
 	ticker       *time.Ticker
-	quit         chan struct{}
 }
 
 func NewEngine(logger utils.Logger, reapInterval time.Duration) *Engine {
@@ -37,7 +36,6 @@ func NewEngine(logger utils.Logger, reapInterval time.Duration) *Engine {
 		Statistics:   make(chan Counters),
 		reapInterval: reapInterval,
 		ticker:       time.NewTicker(reapInterval),
-		quit:         make(chan struct{}),
 	}
 	go engine.reap()
 	return engine
@@ -166,19 +164,13 @@ func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) 
 }
 
 func (m *Engine) reap() {
-	for {
-		select {
-		case <-m.ticker.C:
-			m.counters.Clients = uint(m.clients.Reap(func(id string) {
-				m.logger.Debugf("Reaping client %s", id)
-				m.register.RemoveClient(id)
-			}))
-			m.Statistics <- m.counters
-			m.counters = Counters{0, 0, 0, 0}
-		case <-m.quit:
-			m.ticker.Stop()
-			return
-		}
+	for range m.ticker.C {
+		m.counters.Clients = uint(m.clients.Reap(func(id string) {
+			m.logger.Debugf("Reaping client %s", id)
+			m.register.RemoveClient(id)
+		}))
+		m.Statistics <- m.counters
+		m.counters = Counters{0, 0, 0, 0}
 	}
 }
 
