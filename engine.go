@@ -18,22 +18,26 @@ type Counters struct {
 }
 
 type Engine struct {
+	Statistics   chan Counters
 	clients      *memory.ClientRegister
-	register     *memory.SubscriptionRegister
 	logger       utils.Logger
 	counters     Counters
-	Statistics   chan Counters
+	channels     protocol.ClientChannels
 	reapInterval time.Duration
 	ticker       *time.Ticker
 }
 
 func NewEngine(logger utils.Logger, reapInterval time.Duration) *Engine {
 	engine := &Engine{
-		clients:      memory.NewClientRegister(),
-		register:     memory.NewSubscriptionRegister(),
-		counters:     Counters{0, 0, 0, 0},
-		logger:       logger,
-		Statistics:   make(chan Counters),
+		Statistics: make(chan Counters),
+		clients:    memory.NewClientRegister(),
+		counters:   Counters{0, 0, 0, 0},
+		logger:     logger,
+		channels: protocol.ClientChannels{
+			Messages: make(chan protocol.Message),
+			Failed:   make(chan uint),
+			Sent:     make(chan uint),
+		},
 		reapInterval: reapInterval,
 		ticker:       time.NewTicker(reapInterval),
 	}
@@ -62,7 +66,7 @@ func (m *Engine) Connect(request *protocol.Message, client *protocol.Client, con
 	response.Update(protocol.Message{
 		"advice": protocol.DEFAULT_ADVICE,
 	})
-	client.Connect(timeout, 0, response, conn)
+	client.Connect(timeout, 0, response, conn, &m.channels)
 }
 
 func (m *Engine) SubscribeClient(request *protocol.Message, client *protocol.Client) {
@@ -81,10 +85,8 @@ func (m *Engine) SubscribeClient(request *protocol.Message, client *protocol.Cli
 	}
 
 	for _, s := range subs {
-		// Do not register clients subscribing to a service channel
-		// They will be answered directly instead of through the normal subscription system
 		if !protocol.NewChannel(s).IsService() {
-			m.addSubscription(client.Id(), []string{s})
+			client.AddSubscriptions([]string{s})
 		}
 	}
 
@@ -113,27 +115,14 @@ func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
 		requestingClient.Send(response)
 	}
 
-	go func() {
-		msg := protocol.Message{}
-		msg["channel"] = channel.Name()
-		msg["data"] = data
-		// TODO: Missing ID
-
-		msg.SetClientId(request.ClientId())
-
-		recipients := m.register.GetClients(channel.Expand())
-		m.counters.Published++
-		m.logger.Debugf("PUBLISH from %s on %s to %d recipients", request.ClientId(), channel, len(recipients))
-		for _, c := range recipients {
-			if client := m.clients.GetClient(c); client != nil {
-				if client.Send(msg) {
-					m.counters.Sent++
-				} else {
-					m.counters.Failed++
-				}
-			}
-		}
-	}()
+	msg := protocol.Message{}
+	msg["channel"] = channel.Name()
+	msg["data"] = data
+	// TODO: Missing ID
+	msg.SetClientId(request.ClientId())
+	m.logger.Debugf("PUBLISH from %s on %s", request.ClientId(), channel)
+	m.channels.Messages <- msg
+	m.counters.Published++
 }
 
 func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) string {
@@ -164,13 +153,23 @@ func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) 
 }
 
 func (m *Engine) reap() {
-	for range m.ticker.C {
-		m.counters.Clients = uint(m.clients.Reap(func(id string) {
-			m.logger.Debugf("Reaping client %s", id)
-			m.register.RemoveClient(id)
-		}))
-		m.Statistics <- m.counters
-		m.counters = Counters{0, 0, 0, 0}
+	for {
+		select {
+		case <-m.ticker.C:
+			{
+				m.counters.Clients = m.clients.Reap()
+				m.Statistics <- m.counters
+				m.counters = Counters{0, 0, 0, 0}
+			}
+		case s := <-m.channels.Sent:
+			{
+				m.counters.Sent += s
+			}
+		case f := <-m.channels.Failed:
+			{
+				m.counters.Failed += f
+			}
+		}
 	}
 }
 
@@ -182,9 +181,4 @@ func (m *Engine) responseFromRequest(request *protocol.Message) protocol.Message
 	}
 
 	return response
-}
-
-func (m *Engine) addSubscription(clientId string, subscriptions []string) {
-	m.logger.Infof("SUBSCRIBE %s subscription: %v", clientId, subscriptions)
-	m.register.AddSubscription(clientId, subscriptions)
 }

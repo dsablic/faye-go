@@ -36,21 +36,29 @@ func (s *Session) End() {
 	}
 }
 
+type ClientChannels struct {
+	Messages chan Message
+	Failed   chan uint
+	Sent     chan uint
+}
+
 type Client struct {
-	clientId    string
-	connection  Connection
-	responseMsg Message
-	mutex       sync.RWMutex
-	lastSession *Session
-	created     time.Time
-	logger      utils.Logger
+	subscriptions *utils.StringSet
+	clientId      string
+	connection    Connection
+	responseMsg   Message
+	mutex         sync.RWMutex
+	lastSession   *Session
+	created       time.Time
+	logger        utils.Logger
 }
 
 func NewClient(clientId string, logger utils.Logger) *Client {
 	return &Client{
-		clientId: clientId,
-		created:  time.Now(),
-		logger:   logger,
+		subscriptions: utils.NewStringSet(),
+		clientId:      clientId,
+		created:       time.Now(),
+		logger:        logger,
 	}
 }
 
@@ -58,12 +66,27 @@ func (c *Client) Id() string {
 	return c.clientId
 }
 
-func (c *Client) Connect(timeout int, interval int, responseMsg Message, connection Connection) {
+func (c *Client) Connect(timeout int, interval int, responseMsg Message, connection Connection, channels *ClientChannels) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	c.lastSession = NewSession(c, connection, timeout, responseMsg, c.logger)
 	c.responseMsg = responseMsg
+	go func(ch *ClientChannels) {
+		for m := range ch.Messages {
+			if c.ShouldReap() {
+				c.logger.Debugf("Releasing client %s", c.clientId)
+				return
+			}
+			if c.isSubscribed(m.Channel().Expand()) {
+				if c.Send(m) {
+					ch.Sent <- 1
+				} else {
+					ch.Failed <- 1
+				}
+			}
+		}
+	}(channels)
 }
 
 func (c *Client) SetConnection(connection Connection) {
@@ -118,8 +141,26 @@ func (c *Client) Send(msg Message) bool {
 	return true
 }
 
+func (c *Client) AddSubscriptions(patterns []string) {
+	c.logger.Infof("SUBSCRIBE %s subscription: %v", c.clientId, patterns)
+	defer c.mutex.RUnlock()
+	c.mutex.RLock()
+	c.subscriptions.AddMany(patterns)
+}
+
 func (c *Client) isConnected() bool {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	return c.connection != nil && c.connection.IsConnected()
+}
+
+func (c *Client) isSubscribed(patterns []string) bool {
+	defer c.mutex.RUnlock()
+	c.mutex.RLock()
+	for _, p := range patterns {
+		if c.subscriptions.Has(p) {
+			return true
+		}
+	}
+	return false
 }

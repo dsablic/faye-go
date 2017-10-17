@@ -33,7 +33,7 @@ func (cr *ClientRegister) GetClient(clientId string) *protocol.Client {
 	return nil
 }
 
-func (cr *ClientRegister) Reap(onRemove func(id string)) int {
+func (cr *ClientRegister) Reap() uint {
 	cr.mutex.RLock()
 	dead := []string{}
 	for k, v := range cr.clients {
@@ -41,12 +41,11 @@ func (cr *ClientRegister) Reap(onRemove func(id string)) int {
 			dead = append(dead, k)
 		}
 	}
-	count := len(cr.clients) - len(dead)
+	count := uint(len(cr.clients) - len(dead))
 	cr.mutex.RUnlock()
 	if len(dead) > 0 {
 		cr.mutex.Lock()
 		for _, id := range dead {
-			onRemove(id)
 			delete(cr.clients, id)
 		}
 		cr.mutex.Unlock()
