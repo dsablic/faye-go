@@ -6,6 +6,12 @@ import (
 	"github.com/dsablic/faye-go/protocol"
 )
 
+type ClientRegisterCounters struct {
+	TotalFailed uint64
+	TotalSent   uint64
+	Clients     uint
+}
+
 type ClientRegister struct {
 	mutex   sync.RWMutex
 	clients map[string]*protocol.Client
@@ -34,30 +40,36 @@ func (cr *ClientRegister) GetClient(clientId string) *protocol.Client {
 }
 
 func (cr *ClientRegister) Publish(msg protocol.Message) {
+	patterns := msg.Channel().Expand()
 	cr.mutex.RLock()
 	defer cr.mutex.RUnlock()
 	for _, c := range cr.clients {
-		c.Messages <- msg
+		if c.IsSubscribed(patterns) {
+			c.Send(msg)
+		}
 	}
 }
 
-func (cr *ClientRegister) Reap() uint {
+func (cr *ClientRegister) Reap() *ClientRegisterCounters {
+	totals := ClientRegisterCounters{0, 0, 0}
 	cr.mutex.RLock()
 	dead := []string{}
 	for k, v := range cr.clients {
 		if v.ShouldReap() {
 			dead = append(dead, k)
 		}
+		c := v.ResetCounters()
+		totals.TotalFailed += c.Failed
+		totals.TotalSent += c.Sent
 	}
-	count := uint(len(cr.clients) - len(dead))
+	totals.Clients = uint(len(cr.clients) - len(dead))
 	cr.mutex.RUnlock()
 	if len(dead) > 0 {
 		cr.mutex.Lock()
 		for _, id := range dead {
-			cr.clients[id].Release()
 			delete(cr.clients, id)
 		}
 		cr.mutex.Unlock()
 	}
-	return count
+	return &totals
 }

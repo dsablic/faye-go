@@ -2,6 +2,7 @@ package faye
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/dsablic/faye-go/memory"
@@ -21,23 +22,17 @@ type Engine struct {
 	Statistics   chan Counters
 	clients      *memory.ClientRegister
 	logger       utils.Logger
-	counters     Counters
-	channels     protocol.CounterChannels
+	published    uint64
 	reapInterval time.Duration
 	ticker       *time.Ticker
 }
 
 func NewEngine(logger utils.Logger, reapInterval time.Duration) *Engine {
 	engine := &Engine{
-		Statistics: make(chan Counters),
-		clients:    memory.NewClientRegister(),
-		counters:   Counters{0, 0, 0, 0},
-		logger:     logger,
-		channels: protocol.CounterChannels{
-			Failed:    make(chan uint),
-			Sent:      make(chan uint),
-			Published: make(chan uint),
-		},
+		Statistics:   make(chan Counters),
+		clients:      memory.NewClientRegister(),
+		logger:       logger,
+		published:    0,
 		reapInterval: reapInterval,
 		ticker:       time.NewTicker(reapInterval),
 	}
@@ -66,7 +61,7 @@ func (m *Engine) Connect(request *protocol.Message, client *protocol.Client, con
 	response.Update(protocol.Message{
 		"advice": protocol.DEFAULT_ADVICE,
 	})
-	client.Connect(timeout, 0, response, conn, &m.channels)
+	client.Connect(timeout, 0, response, conn)
 }
 
 func (m *Engine) SubscribeClient(request *protocol.Message, client *protocol.Client) {
@@ -121,8 +116,10 @@ func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
 	// TODO: Missing ID
 	msg.SetClientId(request.ClientId())
 	m.logger.Debugf("PUBLISH from %s on %s", request.ClientId(), channel)
-	go m.clients.Publish(msg)
-	m.channels.Published <- 1
+	go func() {
+		m.clients.Publish(msg)
+		atomic.AddUint64(&m.published, 1)
+	}()
 }
 
 func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) string {
@@ -153,26 +150,17 @@ func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) 
 }
 
 func (m *Engine) reap() {
-	for {
+	for range m.ticker.C {
+		registerCounters := m.clients.Reap()
+		c := Counters{}
+		c.Clients = registerCounters.Clients
+		c.Failed = uint(registerCounters.TotalFailed)
+		c.Sent = uint(registerCounters.TotalSent)
+		c.Published = uint(atomic.SwapUint64(&m.published, 0))
 		select {
-		case <-m.ticker.C:
-			{
-				m.counters.Clients = m.clients.Reap()
-				m.Statistics <- m.counters
-				m.counters = Counters{0, 0, 0, 0}
-			}
-		case s := <-m.channels.Sent:
-			{
-				m.counters.Sent += s
-			}
-		case f := <-m.channels.Failed:
-			{
-				m.counters.Failed += f
-			}
-		case p := <-m.channels.Published:
-			{
-				m.counters.Published += p
-			}
+		case m.Statistics <- c:
+		default:
+			m.logger.Errorf("Statistics channel full")
 		}
 	}
 }

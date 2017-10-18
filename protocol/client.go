@@ -3,6 +3,7 @@ package protocol
 import (
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dsablic/faye-go/utils"
@@ -36,10 +37,9 @@ func (s *Session) End() {
 	}
 }
 
-type CounterChannels struct {
-	Failed    chan uint
-	Sent      chan uint
-	Published chan uint
+type ClientCounters struct {
+	Failed uint64
+	Sent   uint64
 }
 
 type Client struct {
@@ -52,7 +52,7 @@ type Client struct {
 	lastSession   *Session
 	created       time.Time
 	logger        utils.Logger
-	quit          chan bool
+	counters      ClientCounters
 }
 
 func NewClient(clientId string, logger utils.Logger) *Client {
@@ -61,8 +61,7 @@ func NewClient(clientId string, logger utils.Logger) *Client {
 		clientId:      clientId,
 		created:       time.Now(),
 		logger:        logger,
-		Messages:      make(chan Message),
-		quit:          make(chan bool),
+		counters:      ClientCounters{0, 0},
 	}
 }
 
@@ -70,36 +69,12 @@ func (c *Client) Id() string {
 	return c.clientId
 }
 
-func (c *Client) Connect(timeout int, interval int, responseMsg Message, connection Connection, ch *CounterChannels) {
+func (c *Client) Connect(timeout int, interval int, responseMsg Message, connection Connection) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	c.lastSession = NewSession(c, connection, timeout, responseMsg, c.logger)
 	c.responseMsg = responseMsg
-	go func() {
-		for {
-			select {
-			case m := <-c.Messages:
-				{
-					if c.isSubscribed(m.Channel().Expand()) {
-						if c.Send(m) {
-							ch.Sent <- 1
-						} else {
-							ch.Failed <- 1
-						}
-					}
-				}
-			case <-c.quit:
-				return
-			}
-		}
-	}()
-}
-
-func (c *Client) Release() {
-	defer c.mutex.RUnlock()
-	c.mutex.RLock()
-	c.quit <- true
 }
 
 func (c *Client) SetConnection(connection Connection) {
@@ -130,26 +105,16 @@ func (c *Client) ShouldReap() bool {
 
 func (c *Client) AddSubscriptions(patterns []string) {
 	c.logger.Infof("SUBSCRIBE %s subscription: %v", c.clientId, patterns)
-	defer c.mutex.RUnlock()
-	c.mutex.RLock()
+	defer c.mutex.Unlock()
+	c.mutex.Lock()
 	c.subscriptions.AddMany(patterns)
 }
 
-func (c *Client) isConnected() bool {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-	return c.connection != nil && c.connection.IsConnected()
-}
-
-func (c *Client) isSubscribed(patterns []string) bool {
-	defer c.mutex.RUnlock()
-	c.mutex.RLock()
-	for _, p := range patterns {
-		if c.subscriptions.Has(p) {
-			return true
-		}
+func (c *Client) ResetCounters() ClientCounters {
+	return ClientCounters{
+		Sent:   atomic.SwapUint64(&c.counters.Sent, 0),
+		Failed: atomic.SwapUint64(&c.counters.Failed, 0),
 	}
-	return false
 }
 
 func (c *Client) Send(msg Message) bool {
@@ -167,12 +132,32 @@ func (c *Client) Send(msg Message) bool {
 		if err != nil {
 			c.logger.Debugf("Was unable to send to %s requeued %d messages", c.clientId, len(msgs))
 			c.connection.Close()
+			atomic.AddUint64(&c.counters.Failed, 1)
 			return false
 		}
 
+		atomic.AddUint64(&c.counters.Sent, 1)
 		return true
 	}
 
 	c.logger.Debugf("Not connected for %s", c.clientId)
+	atomic.AddUint64(&c.counters.Failed, 1)
 	return false
+}
+
+func (c *Client) IsSubscribed(patterns []string) bool {
+	defer c.mutex.RUnlock()
+	c.mutex.RLock()
+	for _, p := range patterns {
+		if c.subscriptions.Has(p) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Client) isConnected() bool {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	return c.connection != nil && c.connection.IsConnected()
 }
