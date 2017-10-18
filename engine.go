@@ -34,8 +34,9 @@ func NewEngine(logger utils.Logger, reapInterval time.Duration) *Engine {
 		counters:   Counters{0, 0, 0, 0},
 		logger:     logger,
 		channels: protocol.CounterChannels{
-			Failed: make(chan uint),
-			Sent:   make(chan uint),
+			Failed:    make(chan uint),
+			Sent:      make(chan uint),
+			Published: make(chan uint),
 		},
 		reapInterval: reapInterval,
 		ticker:       time.NewTicker(reapInterval),
@@ -110,18 +111,18 @@ func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
 	if requestingClient == nil {
 		conn.Send([]protocol.Message{response})
 		conn.Close()
-	} else {
-		requestingClient.Send(response)
+		return
 	}
 
+	requestingClient.Send(response)
 	msg := protocol.Message{}
 	msg["channel"] = channel.Name()
 	msg["data"] = data
 	// TODO: Missing ID
 	msg.SetClientId(request.ClientId())
 	m.logger.Debugf("PUBLISH from %s on %s", request.ClientId(), channel)
-	m.clients.Publish(msg)
-	m.counters.Published++
+	go m.clients.Publish(msg)
+	m.channels.Published <- 1
 }
 
 func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) string {
@@ -167,6 +168,10 @@ func (m *Engine) reap() {
 		case f := <-m.channels.Failed:
 			{
 				m.counters.Failed += f
+			}
+		case p := <-m.channels.Published:
+			{
+				m.counters.Published += p
 			}
 		}
 	}

@@ -37,8 +37,9 @@ func (s *Session) End() {
 }
 
 type CounterChannels struct {
-	Failed chan uint
-	Sent   chan uint
+	Failed    chan uint
+	Sent      chan uint
+	Published chan uint
 }
 
 type Client struct {
@@ -173,5 +174,5 @@ func (c *Client) Send(msg Message) bool {
 	}
 
 	c.logger.Debugf("Not connected for %s", c.clientId)
-	return true
+	return false
 }
