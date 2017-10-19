@@ -3,23 +3,23 @@ package memory
 import (
 	"sync"
 
-	"github.com/roncohen/faye-go/utils"
+	"github.com/dsablic/faye-go/utils"
 )
 
 type SubscriptionRegister struct {
-	clientByPattern  map[string]utils.StringSet
-	patternsByClient map[string]utils.StringSet
+	clientByPattern  map[string]*utils.StringSet
+	patternsByClient map[string]*utils.StringSet
 	mutex            sync.RWMutex
 }
 
 func NewSubscriptionRegister() *SubscriptionRegister {
 	return &SubscriptionRegister{
-		clientByPattern:  make(map[string]utils.StringSet),
-		patternsByClient: make(map[string]utils.StringSet),
+		clientByPattern:  make(map[string]*utils.StringSet),
+		patternsByClient: make(map[string]*utils.StringSet),
 	}
 }
 
-func (sr SubscriptionRegister) AddSubscription(clientId string, patterns []string) {
+func (sr *SubscriptionRegister) AddSubscription(clientId string, patterns []string) {
 	sr.mutex.Lock()
 	defer sr.mutex.Unlock()
 	for _, pattern := range patterns {
@@ -37,7 +37,7 @@ func (sr SubscriptionRegister) AddSubscription(clientId string, patterns []strin
 	sr.patternsByClient[clientId].AddMany(patterns)
 }
 
-func (sr SubscriptionRegister) RemoveSubscription(clientId string, patterns []string) {
+func (sr *SubscriptionRegister) RemoveSubscription(clientId string, patterns []string) {
 	sr.mutex.Lock()
 	defer sr.mutex.Unlock()
 
@@ -45,21 +45,22 @@ func (sr SubscriptionRegister) RemoveSubscription(clientId string, patterns []st
 		sr.clientByPattern[pattern].Remove(clientId)
 		sr.patternsByClient[clientId].Remove(pattern)
 	}
-
 }
 
-func (sr SubscriptionRegister) GetClients(patterns []string) []string {
-	StringSet := utils.NewStringSet()
+func (sr *SubscriptionRegister) GetClients(patterns []string) []string {
+	set := utils.NewStringSet()
 	sr.mutex.RLock()
 	defer sr.mutex.RUnlock()
 
 	for _, pattern := range patterns {
-		StringSet.AddMany(sr.clientByPattern[pattern].GetAll())
+		if p := sr.clientByPattern[pattern]; p != nil {
+			set.AddMany(p.GetAll())
+		}
 	}
-	return StringSet.GetAll()
+	return set.GetAll()
 }
 
-func (sr SubscriptionRegister) RemoveClient(clientId string) {
+func (sr *SubscriptionRegister) RemoveClient(clientId string) {
 	sr.mutex.Lock()
 	defer sr.mutex.Unlock()
 

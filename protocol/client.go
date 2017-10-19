@@ -43,25 +43,23 @@ type ClientCounters struct {
 }
 
 type Client struct {
-	clientId      string
-	subscriptions *utils.StringSet
-	Messages      chan Message
-	connection    Connection
-	responseMsg   Message
-	mutex         sync.RWMutex
-	lastSession   *Session
-	created       time.Time
-	logger        utils.Logger
-	counters      ClientCounters
+	clientId    string
+	Messages    chan Message
+	connection  Connection
+	responseMsg Message
+	mutex       sync.RWMutex
+	lastSession *Session
+	created     time.Time
+	logger      utils.Logger
+	counters    ClientCounters
 }
 
 func NewClient(clientId string, logger utils.Logger) *Client {
 	return &Client{
-		subscriptions: utils.NewStringSet(),
-		clientId:      clientId,
-		created:       time.Now(),
-		logger:        logger,
-		counters:      ClientCounters{0, 0},
+		clientId: clientId,
+		created:  time.Now(),
+		logger:   logger,
+		counters: ClientCounters{0, 0},
 	}
 }
 
@@ -103,13 +101,6 @@ func (c *Client) ShouldReap() bool {
 	return false
 }
 
-func (c *Client) AddSubscriptions(patterns []string) {
-	c.logger.Infof("SUBSCRIBE %s subscription: %v", c.clientId, patterns)
-	defer c.mutex.Unlock()
-	c.mutex.Lock()
-	c.subscriptions.AddMany(patterns)
-}
-
 func (c *Client) ResetCounters() ClientCounters {
 	return ClientCounters{
 		Sent:   atomic.SwapUint64(&c.counters.Sent, 0),
@@ -142,17 +133,6 @@ func (c *Client) Send(msg Message) bool {
 
 	c.logger.Debugf("Not connected for %s", c.clientId)
 	atomic.AddUint64(&c.counters.Failed, 1)
-	return false
-}
-
-func (c *Client) IsSubscribed(patterns []string) bool {
-	defer c.mutex.RUnlock()
-	c.mutex.RLock()
-	for _, p := range patterns {
-		if c.subscriptions.Has(p) {
-			return true
-		}
-	}
 	return false
 }
 

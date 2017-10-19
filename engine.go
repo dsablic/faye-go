@@ -81,7 +81,8 @@ func (m *Engine) SubscribeClient(request *protocol.Message, client *protocol.Cli
 
 	for _, s := range subs {
 		if !protocol.NewChannel(s).IsService() {
-			client.AddSubscriptions([]string{s})
+			m.logger.Infof("SUBSCRIBE %s subscription: %v", client.Id(), s)
+			m.clients.AddSubscription(client.Id(), []string{s})
 		}
 	}
 
