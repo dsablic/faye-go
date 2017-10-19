@@ -41,15 +41,15 @@ func (cr *ClientRegister) GetClient(clientId string) *protocol.Client {
 	return nil
 }
 
-func (cr *ClientRegister) AddSubscription(clientId string, patterns []string) {
-	cr.subscriptions.AddSubscription(clientId, patterns)
+func (cr *ClientRegister) AddSubscription(client *protocol.Client, patterns []string) {
+	cr.subscriptions.AddSubscription(client, patterns)
 }
 
 func (cr *ClientRegister) Publish(msg protocol.Message) {
 	cr.mutex.RLock()
 	defer cr.mutex.RUnlock()
-	for _, clientId := range cr.subscriptions.GetClients(msg.Channel().Expand()) {
-		cr.clients[clientId].Send(msg)
+	for _, client := range cr.subscriptions.GetSubscribers(msg.Channel().Expand()) {
+		client.(*protocol.Client).Send(msg)
 	}
 }
 
@@ -57,11 +57,12 @@ func (cr *ClientRegister) Reap() *ClientRegisterCounters {
 	totals := ClientRegisterCounters{0, 0, 0}
 	cr.mutex.RLock()
 	dead := []string{}
-	for k, v := range cr.clients {
-		if v.ShouldReap() {
-			dead = append(dead, k)
+	for id, client := range cr.clients {
+		if client.ShouldReap() {
+			cr.subscriptions.RemoveClient(client)
+			dead = append(dead, id)
 		}
-		c := v.ResetCounters()
+		c := client.ResetCounters()
 		totals.TotalFailed += c.Failed
 		totals.TotalSent += c.Sent
 	}
@@ -70,7 +71,6 @@ func (cr *ClientRegister) Reap() *ClientRegisterCounters {
 	if len(dead) > 0 {
 		cr.mutex.Lock()
 		for _, id := range dead {
-			cr.subscriptions.RemoveClient(id)
 			delete(cr.clients, id)
 		}
 		cr.mutex.Unlock()

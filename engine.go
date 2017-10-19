@@ -19,7 +19,7 @@ type Counters struct {
 }
 
 type Engine struct {
-	Statistics   chan Counters
+	statistics   chan Counters
 	clients      *memory.ClientRegister
 	logger       utils.Logger
 	published    uint64
@@ -27,9 +27,9 @@ type Engine struct {
 	ticker       *time.Ticker
 }
 
-func NewEngine(logger utils.Logger, reapInterval time.Duration) *Engine {
+func NewEngine(logger utils.Logger, reapInterval time.Duration, statistics chan Counters) *Engine {
 	engine := &Engine{
-		Statistics:   make(chan Counters),
+		statistics:   statistics,
 		clients:      memory.NewClientRegister(),
 		logger:       logger,
 		published:    0,
@@ -82,7 +82,7 @@ func (m *Engine) SubscribeClient(request *protocol.Message, client *protocol.Cli
 	for _, s := range subs {
 		if !protocol.NewChannel(s).IsService() {
 			m.logger.Infof("SUBSCRIBE %s subscription: %v", client.Id(), s)
-			m.clients.AddSubscription(client.Id(), []string{s})
+			m.clients.AddSubscription(client, []string{s})
 		}
 	}
 
@@ -159,7 +159,7 @@ func (m *Engine) reap() {
 		c.Sent = uint(registerCounters.TotalSent)
 		c.Published = uint(atomic.SwapUint64(&m.published, 0))
 		select {
-		case m.Statistics <- c:
+		case m.statistics <- c:
 		default:
 			m.logger.Errorf("Statistics channel full")
 		}

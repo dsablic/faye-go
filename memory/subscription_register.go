@@ -7,65 +7,69 @@ import (
 )
 
 type SubscriptionRegister struct {
-	clientByPattern  map[string]*utils.StringSet
-	patternsByClient map[string]*utils.StringSet
-	mutex            sync.RWMutex
+	subscriberByPattern  map[string]*utils.ValueSet
+	patternsBySubscriber map[interface{}]*utils.StringSet
+	mutex                sync.RWMutex
 }
 
 func NewSubscriptionRegister() *SubscriptionRegister {
 	return &SubscriptionRegister{
-		clientByPattern:  make(map[string]*utils.StringSet),
-		patternsByClient: make(map[string]*utils.StringSet),
+		subscriberByPattern:  make(map[string]*utils.ValueSet),
+		patternsBySubscriber: make(map[interface{}]*utils.StringSet),
 	}
 }
 
-func (sr *SubscriptionRegister) AddSubscription(clientId string, patterns []string) {
+func (sr *SubscriptionRegister) AddSubscription(subscriber interface{}, patterns []string) {
 	sr.mutex.Lock()
 	defer sr.mutex.Unlock()
+
 	for _, pattern := range patterns {
-		_, ok := sr.clientByPattern[pattern]
-		if !ok {
-			sr.clientByPattern[pattern] = utils.NewStringSet()
+		if _, ok := sr.subscriberByPattern[pattern]; !ok {
+			sr.subscriberByPattern[pattern] = utils.NewValueSet()
 		}
-		sr.clientByPattern[pattern].Add(clientId)
+		sr.subscriberByPattern[pattern].Add(subscriber)
 	}
 
-	_, ok := sr.patternsByClient[clientId]
-	if !ok {
-		sr.patternsByClient[clientId] = utils.NewStringSet()
+	if _, ok := sr.patternsBySubscriber[subscriber]; !ok {
+		sr.patternsBySubscriber[subscriber] = utils.NewStringSet()
 	}
-	sr.patternsByClient[clientId].AddMany(patterns)
+
+	sr.patternsBySubscriber[subscriber].AddMany(patterns)
 }
 
-func (sr *SubscriptionRegister) RemoveSubscription(clientId string, patterns []string) {
+func (sr *SubscriptionRegister) RemoveSubscription(subscriber interface{}, patterns []string) {
 	sr.mutex.Lock()
 	defer sr.mutex.Unlock()
 
 	for _, pattern := range patterns {
-		sr.clientByPattern[pattern].Remove(clientId)
-		sr.patternsByClient[clientId].Remove(pattern)
+		if p, ok := sr.subscriberByPattern[pattern]; ok {
+			p.Remove(subscriber)
+		}
+		if s, ok := sr.patternsBySubscriber[subscriber]; ok {
+			s.Remove(pattern)
+		}
 	}
 }
 
-func (sr *SubscriptionRegister) GetClients(patterns []string) []string {
-	set := utils.NewStringSet()
+func (sr *SubscriptionRegister) GetSubscribers(patterns []string) []interface{} {
+	set := utils.NewValueSet()
 	sr.mutex.RLock()
 	defer sr.mutex.RUnlock()
 
 	for _, pattern := range patterns {
-		if p := sr.clientByPattern[pattern]; p != nil {
+		if p, ok := sr.subscriberByPattern[pattern]; ok {
 			set.AddMany(p.GetAll())
 		}
 	}
 	return set.GetAll()
 }
 
-func (sr *SubscriptionRegister) RemoveClient(clientId string) {
+func (sr *SubscriptionRegister) RemoveClient(subscriber interface{}) {
 	sr.mutex.Lock()
 	defer sr.mutex.Unlock()
 
-	for _, pattern := range sr.patternsByClient[clientId].GetAll() {
-		sr.clientByPattern[pattern].Remove(clientId)
+	for _, pattern := range sr.patternsBySubscriber[subscriber].GetAll() {
+		sr.subscriberByPattern[pattern].Remove(subscriber)
 	}
-	delete(sr.patternsByClient, clientId)
+	delete(sr.patternsBySubscriber, subscriber)
 }
