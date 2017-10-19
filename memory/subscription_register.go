@@ -68,8 +68,12 @@ func (sr *SubscriptionRegister) RemoveClient(subscriber interface{}) {
 	sr.mutex.Lock()
 	defer sr.mutex.Unlock()
 
-	for _, pattern := range sr.patternsBySubscriber[subscriber].GetAll() {
-		sr.subscriberByPattern[pattern].Remove(subscriber)
+	if p, ok := sr.patternsBySubscriber[subscriber]; ok {
+		for _, pattern := range p.GetAll() {
+			if s, ok := sr.subscriberByPattern[pattern]; ok {
+				s.Remove(subscriber)
+			}
+		}
 	}
 	delete(sr.patternsBySubscriber, subscriber)
 }
