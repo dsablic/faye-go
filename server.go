@@ -98,7 +98,6 @@ func (s *Server) handleMeta(msg *protocol.Message, conn protocol.Connection) pro
 			response["successful"] = false
 			response["advice"] = map[string]interface{}{"reconnect": "handshake", "interval": 1000}
 			conn.Send([]protocol.Message{response})
-			conn.Close()
 		}
 	}
 

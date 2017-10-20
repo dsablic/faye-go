@@ -106,7 +106,6 @@ func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
 
 	if requestingClient == nil {
 		conn.Send([]protocol.Message{response})
-		conn.Close()
 		return
 	}
 
