@@ -108,5 +108,4 @@ func (s *Server) respondWithError(conn protocol.Connection, err string) {
 	response := protocol.Message{}
 	response["error"] = err
 	conn.Send([]protocol.Message{response})
-	conn.Close()
 }
