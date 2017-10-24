@@ -106,14 +106,13 @@ func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
 
 	if requestingClient == nil {
 		conn.Send([]protocol.Message{response})
-		return
+	} else {
+		requestingClient.Send(response)
 	}
 
-	requestingClient.Send(response)
 	msg := protocol.Message{}
 	msg["channel"] = channel.Name()
 	msg["data"] = data
-	// TODO: Missing ID
 	msg.SetClientId(request.ClientId())
 	m.logger.Debugf("PUBLISH from %s on %s", request.ClientId(), channel)
 	go func() {
