@@ -1,6 +1,8 @@
 package faye
 
 import (
+	"encoding/json"
+
 	"github.com/dsablic/faye-go/protocol"
 	"github.com/dsablic/faye-go/utils"
 )
@@ -31,17 +33,30 @@ func (s *Server) HandleRequest(msges interface{}, conn protocol.Connection) {
 		for _, msg := range msg_list {
 			var m protocol.Message = msg.(map[string]interface{})
 			s.handleMessage(&m, conn)
+			return
 		}
 	case map[string]interface{}:
 		var m protocol.Message = msges.(map[string]interface{})
 		if nested, ok := m["message"]; ok {
-			m = nested.(map[string]interface{})
+			switch nested.(type) {
+			case string:
+				var data interface{}
+				if err := json.Unmarshal([]byte(nested.(string)), &data); err != nil {
+					goto InvalidMessage
+				}
+				m = data.(map[string]interface{})
+			case map[string]interface{}:
+				m = nested.(map[string]interface{})
+			default:
+				goto InvalidMessage
+			}
 		}
 		s.handleMessage(&m, conn)
-	default:
-		s.logger.Warnf("Invalid message %v", msges)
-		s.respondWithError(conn, "Invalid message")
+		return
 	}
+InvalidMessage:
+	s.logger.Warnf("Invalid message %v", msges)
+	s.respondWithError(conn, "Invalid message")
 }
 
 func (s *Server) getClient(request *protocol.Message, conn protocol.Connection) *protocol.Client {
