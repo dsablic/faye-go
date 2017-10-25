@@ -86,7 +86,7 @@ func (m *Engine) SubscribeClient(request *protocol.Message, client *protocol.Cli
 		}
 	}
 
-	client.Send(response)
+	client.Send(response, request.Jsonp())
 }
 
 func (m *Engine) Disconnect(request *protocol.Message, client *protocol.Client, conn protocol.Connection) {
@@ -107,7 +107,7 @@ func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
 	if requestingClient == nil {
 		conn.Send([]protocol.Message{response})
 	} else {
-		requestingClient.Send(response)
+		requestingClient.Send(response, request.Jsonp())
 	}
 
 	msg := protocol.Message{}
@@ -127,7 +127,6 @@ func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) 
 
 	response := m.responseFromRequest(request)
 	response["successful"] = false
-
 	if version == protocol.BAYEUX_VERSION {
 		newClientId = m.NewClient(conn).Id()
 
@@ -144,7 +143,11 @@ func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) 
 		response["error"] = fmt.Sprintf("Only supported version is '%s'", protocol.BAYEUX_VERSION)
 	}
 
-	conn.Send([]protocol.Message{response})
+	if jsonp := request.Jsonp(); jsonp != "" {
+		conn.SendJsonp([]protocol.Message{response}, jsonp)
+	} else {
+		conn.Send([]protocol.Message{response})
+	}
 	return newClientId
 }
 

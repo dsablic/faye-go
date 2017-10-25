@@ -2,6 +2,7 @@ package faye
 
 import (
 	"encoding/json"
+	"net/url"
 
 	"github.com/dsablic/faye-go/protocol"
 	"github.com/dsablic/faye-go/utils"
@@ -29,8 +30,7 @@ func NewServer(logger utils.Logger, engine *Engine, validator Validator) *Server
 func (s *Server) HandleRequest(msges interface{}, conn protocol.Connection) {
 	switch msges.(type) {
 	case []interface{}:
-		msg_list := msges.([]interface{})
-		for _, msg := range msg_list {
+		for _, msg := range msges.([]interface{}) {
 			var m protocol.Message = msg.(map[string]interface{})
 			s.handleMessage(&m, conn)
 			return
@@ -52,6 +52,18 @@ func (s *Server) HandleRequest(msges interface{}, conn protocol.Connection) {
 			}
 		}
 		s.handleMessage(&m, conn)
+		return
+	case url.Values:
+		var msgList []map[string]interface{}
+		vals := msges.(url.Values)
+		if err := json.Unmarshal([]byte(vals.Get("message")), &msgList); err != nil {
+			goto InvalidMessage
+		}
+		for _, msg := range msgList {
+			msg["jsonp"] = vals.Get("jsonp")
+			var m protocol.Message = msg
+			s.handleMessage(&m, conn)
+		}
 		return
 	}
 InvalidMessage:
@@ -93,10 +105,8 @@ func (s *Server) handleMeta(msg *protocol.Message, conn protocol.Connection) pro
 				s.engine.Handshake(msg, conn)
 			case protocol.META_CONNECT_CHANNEL:
 				s.engine.Connect(msg, client, conn)
-
 			case protocol.META_DISCONNECT_CHANNEL:
 				s.engine.Disconnect(msg, client, conn)
-
 			case protocol.META_SUBSCRIBE_CHANNEL:
 				if s.validator.SubscribeValid(msg) {
 					s.engine.SubscribeClient(msg, client)

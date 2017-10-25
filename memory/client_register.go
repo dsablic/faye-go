@@ -49,7 +49,7 @@ func (cr *ClientRegister) Publish(msg protocol.Message) {
 	cr.mutex.RLock()
 	defer cr.mutex.RUnlock()
 	for _, client := range cr.subscriptions.GetSubscribers(msg.Channel().Expand()) {
-		client.(*protocol.Client).Send(msg)
+		client.(*protocol.Client).Send(msg, "")
 	}
 }
 

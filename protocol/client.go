@@ -108,7 +108,7 @@ func (c *Client) ResetCounters() ClientCounters {
 	}
 }
 
-func (c *Client) Send(msg Message) bool {
+func (c *Client) Send(msg Message, jsonp string) bool {
 	if c.isConnected() {
 		c.mutex.Lock()
 		defer c.mutex.Unlock()
@@ -118,7 +118,13 @@ func (c *Client) Send(msg Message) bool {
 		}
 		c.logger.Debugf("Sending %d msgs to %s on %s", len(msgs), c.clientId, reflect.TypeOf(c.connection))
 
-		err := c.connection.Send(msgs)
+		var err error
+
+		if jsonp != "" {
+			err = c.connection.SendJsonp(msgs, jsonp)
+		} else {
+			err = c.connection.Send(msgs)
+		}
 
 		if err != nil {
 			c.logger.Debugf("Was unable to send to %s requeued %d messages", c.clientId, len(msgs))

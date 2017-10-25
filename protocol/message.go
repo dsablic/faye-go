@@ -26,6 +26,13 @@ func (m Message) ClientId() string {
 	return ""
 }
 
+func (m Message) Jsonp() string {
+	if jsonp, ok := m["jsonp"].(string); ok {
+		return jsonp
+	}
+	return ""
+}
+
 func (m Message) SetClientId(clientId string) {
 	m["clientId"] = clientId
 }

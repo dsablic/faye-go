@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"errors"
 	"io"
 	"sync"
 
@@ -30,6 +31,10 @@ func (wc *WebSocketConnection) Send(msgs []protocol.Message) error {
 		wc.failed = true
 	}
 	return err
+}
+
+func (wc *WebSocketConnection) SendJsonp(msgs []protocol.Message, _ string) error {
+	return errors.New("Jsonp is not supported over websockets")
 }
 
 func (wc *WebSocketConnection) IsConnected() bool {
