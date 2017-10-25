@@ -56,8 +56,14 @@ func (s *Server) HandleRequest(msges interface{}, conn protocol.Connection) {
 	case url.Values:
 		var msgList []map[string]interface{}
 		vals := msges.(url.Values)
-		if err := json.Unmarshal([]byte(vals.Get("message")), &msgList); err != nil {
-			goto InvalidMessage
+		message := vals.Get("message")
+		if err := json.Unmarshal([]byte(message), &msgList); err != nil {
+			var single map[string]interface{}
+			if err := json.Unmarshal([]byte(message), &single); err != nil {
+				goto InvalidMessage
+			} else {
+				msgList = append(msgList, single)
+			}
 		}
 		for _, msg := range msgList {
 			msg["jsonp"] = vals.Get("jsonp")

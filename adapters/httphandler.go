@@ -44,22 +44,10 @@ func FayeHandler(server *faye.Server) http.Handler {
 
 			transport.WebsocketServer(server)(ws)
 		} else {
-
-			switch r.Method {
-			case "POST":
-				var v interface{}
-				dec := json.NewDecoder(r.Body)
-				if err := dec.Decode(&v); err == nil {
-					transport.MakeLongPoll(v, server, w)
-				} else {
-					server.Logger().Errorf("Couldn't decode request body: %v", r)
-				}
-			case "GET":
-				if body := decode(r); body != nil {
-					transport.MakeLongPoll(body, server, w)
-				} else {
-					server.Logger().Errorf("Couldn't decode request body: %v", r)
-				}
+			if body := decode(r); body != nil {
+				transport.MakeLongPoll(body, server, w)
+			} else {
+				server.Logger().Errorf("Couldn't decode request body: %v", r)
 			}
 		}
 	})
