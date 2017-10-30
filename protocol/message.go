@@ -8,7 +8,7 @@ type Advice struct {
 	Timeout   int    `json:"timeout"`
 }
 
-var DEFAULT_ADVICE = Advice{Reconnect: "retry", Interval: 0, Timeout: 10000}
+var DEFAULT_ADVICE = Advice{Reconnect: "retry", Interval: 0, Timeout: 25000}
 
 type Message map[string]interface{}
 
