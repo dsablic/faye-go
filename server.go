@@ -124,7 +124,7 @@ func (s *Server) handleMeta(msg *protocol.Message, conn protocol.Connection) pro
 				s.logger.Errorf("Message with unknown meta channel received")
 			}
 		} else {
-			s.logger.Warnf("Message %v from unknown client %v", msg.Channel(), msg.ClientId())
+			s.logger.Debugf("Message %v from unknown client %v", msg.Channel(), msg.ClientId())
 			response := *msg
 			response["successful"] = false
 			response["advice"] = map[string]interface{}{"reconnect": "handshake", "interval": 1000}
