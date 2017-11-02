@@ -64,7 +64,7 @@ func (m *Engine) Connect(request *protocol.Message, client *protocol.Client, con
 	client.Connect(timeout, 0, response, conn)
 }
 
-func (m *Engine) SubscribeClient(request *protocol.Message, client *protocol.Client) {
+func (m *Engine) subscriptionResponse(request *protocol.Message) (protocol.Message, []string) {
 	response := m.responseFromRequest(request)
 	response["successful"] = true
 
@@ -79,10 +79,27 @@ func (m *Engine) SubscribeClient(request *protocol.Message, client *protocol.Cli
 		subs = []string{subscription.(string)}
 	}
 
+	return response, subs
+}
+
+func (m *Engine) SubscribeClient(request *protocol.Message, client *protocol.Client) {
+	response, subs := m.subscriptionResponse(request)
 	for _, s := range subs {
 		if !protocol.NewChannel(s).IsService() {
 			m.logger.Infof("SUBSCRIBE %s subscription: %v", client.Id(), s)
 			m.clients.AddSubscription(client, []string{s})
+		}
+	}
+
+	client.Send(response, request.Jsonp())
+}
+
+func (m *Engine) UnsubscribeClient(request *protocol.Message, client *protocol.Client) {
+	response, subs := m.subscriptionResponse(request)
+	for _, s := range subs {
+		if !protocol.NewChannel(s).IsService() {
+			m.logger.Infof("UNSUBSCRIBE %s subscription: %v", client.Id(), s)
+			m.clients.RemoveSubscription(client, []string{s})
 		}
 	}
 

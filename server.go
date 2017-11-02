@@ -113,6 +113,8 @@ func (s *Server) handleMeta(msg *protocol.Message, conn protocol.Connection) pro
 				s.engine.Connect(msg, client, conn)
 			case protocol.MetaDisconnectChannel:
 				s.engine.Disconnect(msg, client, conn)
+			case protocol.MetaUnsubscribeChannel:
+				s.engine.UnsubscribeClient(msg, client)
 			case protocol.MetaSubscribeChannel:
 				if s.validator.SubscribeValid(msg) {
 					s.engine.SubscribeClient(msg, client)

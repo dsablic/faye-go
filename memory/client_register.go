@@ -45,6 +45,10 @@ func (cr *ClientRegister) AddSubscription(client *protocol.Client, patterns []st
 	cr.subscriptions.AddSubscription(client, patterns)
 }
 
+func (cr *ClientRegister) RemoveSubscription(client *protocol.Client, patterns []string) {
+	cr.subscriptions.RemoveSubscription(client, patterns)
+}
+
 func (cr *ClientRegister) Publish(msg protocol.Message) {
 	cr.mutex.RLock()
 	defer cr.mutex.RUnlock()

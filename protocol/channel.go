@@ -7,13 +7,14 @@ import (
 type MetaChannel interface{}
 
 const (
-	MetaPrefix            string = "/meta/"
-	MetaService                  = "/service"
-	MetaHandshakeChannel         = "handshake"
-	MetaSubscribeChannel         = "subscribe"
-	MetaConnectChannel           = "connect"
-	MetaDisconnectChannel        = "disconnect"
-	MetaUnknownChannel           = "unknown"
+	MetaPrefix             string = "/meta/"
+	MetaService                   = "/service"
+	MetaHandshakeChannel          = "handshake"
+	MetaSubscribeChannel          = "subscribe"
+	MetaUnsubscribeChannel        = "unsubscribe"
+	MetaConnectChannel            = "connect"
+	MetaDisconnectChannel         = "disconnect"
+	MetaUnknownChannel            = "unknown"
 )
 
 func NewChannel(name string) Channel {
@@ -47,6 +48,8 @@ func (c Channel) MetaType() MetaChannel {
 			return MetaConnectChannel
 		case MetaSubscribeChannel:
 			return MetaSubscribeChannel
+		case MetaUnsubscribeChannel:
+			return MetaUnsubscribeChannel
 		case MetaDisconnectChannel:
 			return MetaDisconnectChannel
 		case MetaHandshakeChannel:
