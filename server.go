@@ -99,7 +99,7 @@ func (s *Server) handleMessage(msg *protocol.Message, conn protocol.Connection) 
 func (s *Server) handleMeta(msg *protocol.Message, conn protocol.Connection) protocol.Message {
 	meta_channel := msg.Channel().MetaType()
 
-	if meta_channel == protocol.META_HANDSHAKE_CHANNEL {
+	if meta_channel == protocol.MetaHandshakeChannel {
 		s.engine.Handshake(msg, conn)
 	} else {
 		client := s.getClient(msg, conn)
@@ -107,20 +107,20 @@ func (s *Server) handleMeta(msg *protocol.Message, conn protocol.Connection) pro
 			client.SetConnection(conn)
 
 			switch meta_channel {
-			case protocol.META_HANDSHAKE_CHANNEL:
+			case protocol.MetaHandshakeChannel:
 				s.engine.Handshake(msg, conn)
-			case protocol.META_CONNECT_CHANNEL:
+			case protocol.MetaConnectChannel:
 				s.engine.Connect(msg, client, conn)
-			case protocol.META_DISCONNECT_CHANNEL:
+			case protocol.MetaDisconnectChannel:
 				s.engine.Disconnect(msg, client, conn)
-			case protocol.META_SUBSCRIBE_CHANNEL:
+			case protocol.MetaSubscribeChannel:
 				if s.validator.SubscribeValid(msg) {
 					s.engine.SubscribeClient(msg, client)
 				} else {
 					s.logger.Warnf("Invalid subscription %v", msg)
 					s.respondWithError(conn, "Invalid subscription")
 				}
-			case protocol.META_UNKNOWN_CHANNEL:
+			case protocol.MetaUnknownChannel:
 				s.logger.Errorf("Message with unknown meta channel received")
 			}
 		} else {

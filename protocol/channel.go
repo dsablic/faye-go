@@ -7,13 +7,13 @@ import (
 type MetaChannel interface{}
 
 const (
-	META_PREFIX             string = "/meta/"
-	META_SERVICE                   = "/service"
-	META_HANDSHAKE_CHANNEL         = "handshake"
-	META_SUBSCRIBE_CHANNEL         = "subscribe"
-	META_CONNECT_CHANNEL           = "connect"
-	META_DISCONNECT_CHANNEL        = "disconnect"
-	META_UNKNOWN_CHANNEL           = "unknown"
+	MetaPrefix            string = "/meta/"
+	MetaService                  = "/service"
+	MetaHandshakeChannel         = "handshake"
+	MetaSubscribeChannel         = "subscribe"
+	MetaConnectChannel           = "connect"
+	MetaDisconnectChannel        = "disconnect"
+	MetaUnknownChannel           = "unknown"
 )
 
 func NewChannel(name string) Channel {
@@ -31,28 +31,28 @@ func (c Channel) Name() string {
 }
 
 func (c Channel) IsMeta() bool {
-	return strings.HasPrefix(c.name, META_PREFIX)
+	return strings.HasPrefix(c.name, MetaPrefix)
 }
 
 func (c Channel) IsService() bool {
-	return strings.HasPrefix(c.name, META_SERVICE)
+	return strings.HasPrefix(c.name, MetaService)
 }
 
 func (c Channel) MetaType() MetaChannel {
 	if !c.IsMeta() {
 		return nil
 	} else {
-		switch c.name[len(META_PREFIX):] {
-		case META_CONNECT_CHANNEL:
-			return META_CONNECT_CHANNEL
-		case META_SUBSCRIBE_CHANNEL:
-			return META_SUBSCRIBE_CHANNEL
-		case META_DISCONNECT_CHANNEL:
-			return META_DISCONNECT_CHANNEL
-		case META_HANDSHAKE_CHANNEL:
-			return META_HANDSHAKE_CHANNEL
+		switch c.name[len(MetaPrefix):] {
+		case MetaConnectChannel:
+			return MetaConnectChannel
+		case MetaSubscribeChannel:
+			return MetaSubscribeChannel
+		case MetaDisconnectChannel:
+			return MetaDisconnectChannel
+		case MetaHandshakeChannel:
+			return MetaHandshakeChannel
 		default:
-			return META_UNKNOWN_CHANNEL
+			return MetaUnknownChannel
 		}
 	}
 }

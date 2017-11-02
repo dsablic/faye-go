@@ -1,6 +1,6 @@
 package protocol
 
-const BAYEUX_VERSION = "1.0"
+const BayeuxVersion = "1.0"
 
 type Advice struct {
 	Reconnect string `json:"reconnect"`
@@ -8,7 +8,7 @@ type Advice struct {
 	Timeout   int    `json:"timeout"`
 }
 
-var DEFAULT_ADVICE = Advice{Reconnect: "retry", Interval: 0, Timeout: 25000}
+var DefaultAdvice = Advice{Reconnect: "retry", Interval: 0, Timeout: 25000}
 
 type Message map[string]interface{}
 

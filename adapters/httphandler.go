@@ -9,6 +9,24 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+var corsHeaders = map[string]string{
+	"Access-Control-Allow-Credentials": "false",
+	"Access-Control-Allow-Headers":     "Accept, Authorization, Content-Type, Pragma, X-Requested-With",
+	"Access-Control-Allow-Methods":     "POST, GET, PUT",
+	"Access-Control-Allow-Origin":      "*",
+	"Access-Control-Max-Age":           "86400",
+}
+
+func handleOptions(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method == "OPTIONS" {
+		for k, v := range corsHeaders {
+			w.Header().Add(k, v)
+		}
+		return true
+	}
+	return false
+}
+
 func decode(r *http.Request) interface{} {
 	switch r.Method {
 	case "POST":
@@ -44,6 +62,9 @@ func FayeHandler(server *faye.Server) http.Handler {
 
 			transport.WebsocketServer(server)(ws)
 		} else {
+			if handleOptions(w, r) {
+				return
+			}
 			if body := decode(r); body != nil {
 				transport.MakeLongPoll(body, server, w)
 			} else {

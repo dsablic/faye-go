@@ -56,10 +56,10 @@ func (m *Engine) Connect(request *protocol.Message, client *protocol.Client, con
 	response := m.responseFromRequest(request)
 	response["successful"] = true
 
-	timeout := protocol.DEFAULT_ADVICE.Timeout
+	timeout := protocol.DefaultAdvice.Timeout
 
 	response.Update(protocol.Message{
-		"advice": protocol.DEFAULT_ADVICE,
+		"advice": protocol.DefaultAdvice,
 	})
 	client.Connect(timeout, 0, response, conn)
 }
@@ -127,20 +127,20 @@ func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) 
 
 	response := m.responseFromRequest(request)
 	response["successful"] = false
-	if version == protocol.BAYEUX_VERSION {
+	if version == protocol.BayeuxVersion {
 		newClientId = m.NewClient(conn).Id()
 
 		response.Update(protocol.Message{
 			"clientId":                 newClientId,
-			"channel":                  protocol.META_PREFIX + protocol.META_HANDSHAKE_CHANNEL,
-			"version":                  protocol.BAYEUX_VERSION,
-			"advice":                   protocol.DEFAULT_ADVICE,
+			"channel":                  protocol.MetaPrefix + protocol.MetaHandshakeChannel,
+			"version":                  protocol.BayeuxVersion,
+			"advice":                   protocol.DefaultAdvice,
 			"supportedConnectionTypes": []string{"websocket"},
 			"successful":               true,
 		})
 
 	} else {
-		response["error"] = fmt.Sprintf("Only supported version is '%s'", protocol.BAYEUX_VERSION)
+		response["error"] = fmt.Sprintf("Only supported version is '%s'", protocol.BayeuxVersion)
 	}
 
 	if jsonp := request.Jsonp(); jsonp != "" {
