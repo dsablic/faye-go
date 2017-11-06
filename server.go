@@ -73,7 +73,7 @@ func (s *Server) HandleRequest(msges interface{}, conn protocol.Connection) {
 		return
 	}
 InvalidMessage:
-	s.logger.Warnf("Invalid message %v", msges)
+	s.logger.Debugf("Invalid message %v", msges)
 	s.respondWithError(conn, "Invalid message")
 }
 
