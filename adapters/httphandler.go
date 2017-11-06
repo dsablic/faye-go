@@ -68,7 +68,8 @@ func FayeHandler(server *faye.Server) http.Handler {
 			if body := decode(r); body != nil {
 				transport.MakeLongPoll(body, server, w)
 			} else {
-				server.Logger().Errorf("Couldn't decode request body: %v", r)
+				http.Error(w, "Invalid http request", 400)
+				server.Logger().Debugf("Couldn't decode request body: %v", r)
 			}
 		}
 	})
