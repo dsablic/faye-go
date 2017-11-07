@@ -119,12 +119,11 @@ func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
 	data := (*request)["data"]
 	channel := request.Channel()
 
-	if request.Jsonp() == "" {
-		conn.Send([]protocol.Message{response})
+	if jsonp := request.Jsonp(); jsonp != "" {
+		conn.SendJsonp([]protocol.Message{response}, jsonp)
 	} else {
-		conn.SendJsonp([]protocol.Message{response}, request.Jsonp())
+		conn.Send([]protocol.Message{response})
 	}
-	conn.Send([]protocol.Message{response})
 
 	msg := protocol.Message{}
 	msg["channel"] = channel.Name()
