@@ -114,18 +114,17 @@ func (m *Engine) Disconnect(request *protocol.Message, client *protocol.Client, 
 }
 
 func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
-	requestingClient := m.clients.GetClient(request.ClientId())
-
 	response := m.responseFromRequest(request)
 	response["successful"] = true
 	data := (*request)["data"]
 	channel := request.Channel()
 
-	if requestingClient == nil {
+	if request.Jsonp() == "" {
 		conn.Send([]protocol.Message{response})
 	} else {
-		requestingClient.Send(response, request.Jsonp())
+		conn.SendJsonp([]protocol.Message{response}, request.Jsonp())
 	}
+	conn.Send([]protocol.Message{response})
 
 	msg := protocol.Message{}
 	msg["channel"] = channel.Name()

@@ -44,7 +44,6 @@ type ClientCounters struct {
 
 type Client struct {
 	clientId    string
-	Messages    chan Message
 	connection  Connection
 	responseMsg Message
 	mutex       sync.RWMutex

@@ -50,7 +50,6 @@ func decode(r *http.Request) interface{} {
 func FayeHandler(server *faye.Server) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Upgrade") == "websocket" {
-
 			ws, err := websocket.Upgrade(w, r, nil, 1024, 1024)
 			if _, ok := err.(websocket.HandshakeError); ok {
 				http.Error(w, "Not a websocket handshake", 400)
@@ -59,7 +58,6 @@ func FayeHandler(server *faye.Server) http.Handler {
 				server.Logger().Errorf("Websocket upgrade error: %s", err)
 				return
 			}
-
 			transport.WebsocketServer(server)(ws)
 		} else {
 			if handleOptions(w, r) {
