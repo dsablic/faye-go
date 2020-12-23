@@ -8,7 +8,7 @@ import (
 	"github.com/dsablic/faye-go/memory"
 	"github.com/dsablic/faye-go/protocol"
 	"github.com/dsablic/faye-go/utils"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 type Counters struct {
@@ -86,7 +86,7 @@ func (m *Engine) SubscribeClient(request *protocol.Message, client *protocol.Cli
 	response, subs := m.subscriptionResponse(request)
 	for _, s := range subs {
 		if !protocol.NewChannel(s).IsService() {
-			m.logger.Infof("SUBSCRIBE %s subscription: %v", client.Id(), s)
+			m.logger.Debugf("SUBSCRIBE %s subscription: %v", client.Id(), s)
 			m.clients.AddSubscription(client, []string{s})
 		}
 	}
@@ -98,7 +98,7 @@ func (m *Engine) UnsubscribeClient(request *protocol.Message, client *protocol.C
 	response, subs := m.subscriptionResponse(request)
 	for _, s := range subs {
 		if !protocol.NewChannel(s).IsService() {
-			m.logger.Infof("UNSUBSCRIBE %s subscription: %v", client.Id(), s)
+			m.logger.Debugf("UNSUBSCRIBE %s subscription: %v", client.Id(), s)
 			m.clients.RemoveSubscription(client, []string{s})
 		}
 	}
