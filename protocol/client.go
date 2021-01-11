@@ -9,34 +9,6 @@ import (
 	"github.com/dsablic/faye-go/utils"
 )
 
-type Session struct {
-	conn     Connection
-	timeout  int
-	response Message
-	client   *Client
-	started  time.Time
-	logger   utils.Logger
-}
-
-func NewSession(client *Client, conn Connection, timeout int, response Message, logger utils.Logger) *Session {
-	session := Session{conn, timeout, response, client, time.Now(), logger}
-	if timeout > 0 {
-		go func() {
-			time.Sleep(time.Duration(timeout) * time.Millisecond)
-			session.End()
-		}()
-	}
-	return &session
-}
-
-func (s *Session) End() {
-	if s.client.isConnected() {
-		s.conn.Send([]Message{s.response})
-	} else {
-		s.logger.Debugf("No longer connected %s", s.client.clientId)
-	}
-}
-
 type ClientCounters struct {
 	Failed uint64
 	Sent   uint64
@@ -47,7 +19,6 @@ type Client struct {
 	connection  Connection
 	responseMsg Message
 	mutex       sync.RWMutex
-	lastSession *Session
 	created     time.Time
 	logger      utils.Logger
 	counters    ClientCounters
@@ -70,7 +41,16 @@ func (c *Client) Connect(timeout int, interval int, responseMsg Message, connect
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	c.lastSession = NewSession(c, connection, timeout, responseMsg, c.logger)
+	if timeout > 0 {
+		go func() {
+			time.Sleep(time.Duration(timeout) * time.Millisecond)
+			if c.isConnected() {
+				connection.Send([]Message{responseMsg})
+			} else {
+				c.logger.Debugf("No longer connected %s", c.clientId)
+			}
+		}()
+	}
 	c.responseMsg = responseMsg
 }
 
@@ -84,20 +64,7 @@ func (c *Client) SetConnection(connection Connection) {
 }
 
 func (c *Client) ShouldReap() bool {
-	if !c.isConnected() {
-		return true
-	}
-
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	if time.Now().Sub(c.created) > time.Duration(1*time.Minute) {
-		if c.lastSession != nil &&
-			time.Now().Sub(c.lastSession.started) > time.Duration(2*time.Hour) {
-			return true
-		}
-	}
-	return false
+	return !c.isConnected()
 }
 
 func (c *Client) ResetCounters() ClientCounters {
