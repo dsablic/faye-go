@@ -7,18 +7,17 @@ import (
 	"net/http"
 
 	"github.com/dsablic/faye-go/protocol"
+	"github.com/uber-go/atomic"
 )
-
-const LongPollingConnectionPriority = 1
 
 type LongPollingConnection struct {
 	responseChan chan []protocol.Message
-	Closed       bool
-	jsonp        string
+	Closed       *atomic.Bool
+	jsonp        *atomic.String
 }
 
 func NewLongPollingConnection() *LongPollingConnection {
-	return &LongPollingConnection{make(chan []protocol.Message, 1), false, ""}
+	return &LongPollingConnection{make(chan []protocol.Message, 1), atomic.NewBool(false), atomic.NewString("")}
 }
 
 func (lp *LongPollingConnection) enqueueMessages(msgs []protocol.Message) error {
@@ -37,20 +36,16 @@ func (lp *LongPollingConnection) Send(msgs []protocol.Message) error {
 
 func (lp *LongPollingConnection) SendJsonp(msgs []protocol.Message, jsonp string) error {
 	lp.Close()
-	lp.jsonp = jsonp
+	lp.jsonp.Store(jsonp)
 	return lp.enqueueMessages(msgs)
 }
 
 func (lp *LongPollingConnection) IsConnected() bool {
-	return !lp.Closed
+	return !lp.Closed.Load()
 }
 
 func (lp *LongPollingConnection) Close() {
-	lp.Closed = true
-}
-
-func (lp LongPollingConnection) Priority() int {
-	return LongPollingConnectionPriority
+	lp.Closed.Store(true)
 }
 
 func (lp LongPollingConnection) IsSingleShot() bool {
@@ -70,8 +65,9 @@ func MakeLongPoll(msgs interface{}, server Server, w http.ResponseWriter) {
 		if bs, err := json.Marshal(responseMsgs); err != nil {
 			server.Logger().Warnf("While encoding response msgs: %s", err)
 		} else {
-			if conn.jsonp != "" {
-				jsonp := fmt.Sprintf("/**/%v(%v)", conn.jsonp, string(bs))
+			connJsonp := conn.jsonp.Load()
+			if connJsonp != "" {
+				jsonp := fmt.Sprintf("/**/%v(%v)", connJsonp, string(bs))
 				bs = []byte(jsonp)
 				w.Header().Add("Content-Type", "text/javascript")
 			} else {

@@ -57,10 +57,7 @@ func (c *Client) Connect(timeout int, interval int, responseMsg Message, connect
 func (c *Client) SetConnection(connection Connection) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-
-	if c.connection == nil || connection.Priority() > c.connection.Priority() {
-		c.connection = connection
-	}
+	c.connection = connection
 }
 
 func (c *Client) ShouldReap() bool {

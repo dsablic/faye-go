@@ -10,8 +10,6 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const WebSocketConnectionPriority = 10
-
 type Server interface {
 	HandleRequest(interface{}, protocol.Connection)
 	Logger() utils.Logger
@@ -45,10 +43,6 @@ func (wc *WebSocketConnection) IsConnected() bool {
 
 func (wc *WebSocketConnection) Close() {
 	wc.ws.Close()
-}
-
-func (wc *WebSocketConnection) Priority() int {
-	return WebSocketConnectionPriority
 }
 
 func (wc *WebSocketConnection) IsSingleShot() bool {

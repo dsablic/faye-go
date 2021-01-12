@@ -6,5 +6,4 @@ type Connection interface {
 	IsConnected() bool
 	IsSingleShot() bool
 	Close()
-	Priority() int
 }

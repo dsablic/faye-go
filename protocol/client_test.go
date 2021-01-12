@@ -7,7 +7,7 @@ import (
 
 	"github.com/dsablic/faye-go/memory"
 	. "github.com/dsablic/faye-go/protocol"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 var test_ns = memory.NewMemoryNamespace()
@@ -66,10 +66,6 @@ func (f FakeSingleShotConnection) IsConnected() bool {
 
 func (f FakeSingleShotConnection) IsSingleShot() bool {
 	return true
-}
-
-func (f FakeSingleShotConnection) Priority() int {
-	return 1
 }
 
 func TestEnqueAndReleaseMsgs(t *testing.T) {
