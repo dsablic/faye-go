@@ -7,9 +7,11 @@ import (
 )
 
 type ClientRegisterCounters struct {
-	TotalFailed uint64
-	TotalSent   uint64
-	Clients     uint
+	TotalFailed               uint64
+	TotalSent                 uint64
+	Clients                   uint
+	PatternsBySubscriberCount uint64
+	SubscriberByPatternCount  uint64
 }
 
 type ClientRegister struct {
@@ -58,8 +60,10 @@ func (cr *ClientRegister) Publish(msg protocol.Message) {
 }
 
 func (cr *ClientRegister) Reap() *ClientRegisterCounters {
-	totals := ClientRegisterCounters{0, 0, 0}
+	totals := ClientRegisterCounters{0, 0, 0, 0, 0}
 	cr.mutex.RLock()
+	totals.PatternsBySubscriberCount = cr.subscriptions.PatternsBySubscriberCount.Load()
+	totals.SubscriberByPatternCount = cr.subscriptions.SubscriberByPatternCount.Load()
 	dead := []string{}
 	for id, client := range cr.clients {
 		if client.ShouldReap() {

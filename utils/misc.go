@@ -90,6 +90,10 @@ func (c *ValueSet) Has(value interface{}) bool {
 	return ok
 }
 
+func (c *ValueSet) Length() int {
+	return len(c.values)
+}
+
 func (c *ValueSet) GetAll() []interface{} {
 	all := make([]interface{}, len(c.values))
 	i := 0

@@ -12,10 +12,12 @@ import (
 )
 
 type Counters struct {
-	Published uint
-	Sent      uint
-	Clients   uint
-	Failed    uint
+	Published            uint
+	Sent                 uint
+	Clients              uint
+	Failed               uint
+	PatternsBySubscriber uint
+	SubscriberByPattern  uint
 }
 
 type Engine struct {
@@ -174,6 +176,8 @@ func (m *Engine) reap() {
 		c.Failed = uint(registerCounters.TotalFailed)
 		c.Sent = uint(registerCounters.TotalSent)
 		c.Published = uint(atomic.SwapUint64(&m.published, 0))
+		c.SubscriberByPattern = uint(registerCounters.SubscriberByPatternCount)
+		c.PatternsBySubscriber = uint(registerCounters.PatternsBySubscriberCount)
 		select {
 		case m.statistics <- c:
 		default:

@@ -4,19 +4,29 @@ import (
 	"sync"
 
 	"github.com/dsablic/faye-go/utils"
+	"github.com/uber-go/atomic"
 )
 
 type SubscriptionRegister struct {
-	subscriberByPattern  map[string]*utils.ValueSet
-	patternsBySubscriber map[interface{}]*utils.StringSet
-	mutex                sync.RWMutex
+	subscriberByPattern       map[string]*utils.ValueSet
+	patternsBySubscriber      map[interface{}]*utils.StringSet
+	SubscriberByPatternCount  *atomic.Uint64
+	PatternsBySubscriberCount *atomic.Uint64
+	mutex                     sync.RWMutex
 }
 
 func NewSubscriptionRegister() *SubscriptionRegister {
 	return &SubscriptionRegister{
-		subscriberByPattern:  make(map[string]*utils.ValueSet),
-		patternsBySubscriber: make(map[interface{}]*utils.StringSet),
+		subscriberByPattern:       make(map[string]*utils.ValueSet),
+		SubscriberByPatternCount:  atomic.NewUint64(0),
+		patternsBySubscriber:      make(map[interface{}]*utils.StringSet),
+		PatternsBySubscriberCount: atomic.NewUint64(0),
 	}
+}
+
+func (sr *SubscriptionRegister) updateCounts() {
+	sr.PatternsBySubscriberCount.Store(uint64(len(sr.patternsBySubscriber)))
+	sr.SubscriberByPatternCount.Store(uint64(len(sr.subscriberByPattern)))
 }
 
 func (sr *SubscriptionRegister) AddSubscription(subscriber interface{}, patterns []string) {
@@ -35,6 +45,7 @@ func (sr *SubscriptionRegister) AddSubscription(subscriber interface{}, patterns
 	}
 
 	sr.patternsBySubscriber[subscriber].AddMany(patterns)
+	sr.updateCounts()
 }
 
 func (sr *SubscriptionRegister) RemoveSubscription(subscriber interface{}, patterns []string) {
@@ -49,6 +60,7 @@ func (sr *SubscriptionRegister) RemoveSubscription(subscriber interface{}, patte
 			s.Remove(pattern)
 		}
 	}
+	sr.updateCounts()
 }
 
 func (sr *SubscriptionRegister) GetSubscribers(patterns []string) []interface{} {
@@ -72,8 +84,12 @@ func (sr *SubscriptionRegister) RemoveClient(subscriber interface{}) {
 		for _, pattern := range p.GetAll() {
 			if s, ok := sr.subscriberByPattern[pattern]; ok {
 				s.Remove(subscriber)
+				if s.Length() == 0 {
+					delete(sr.subscriberByPattern, pattern)
+				}
 			}
 		}
 	}
 	delete(sr.patternsBySubscriber, subscriber)
+	sr.updateCounts()
 }
