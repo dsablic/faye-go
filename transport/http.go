@@ -48,7 +48,7 @@ func (lp *LongPollingConnection) Close() {
 	lp.Closed.Store(true)
 }
 
-func (lp LongPollingConnection) IsSingleShot() bool {
+func (lp *LongPollingConnection) IsSingleShot() bool {
 	return true
 }
 

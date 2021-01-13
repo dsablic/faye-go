@@ -86,25 +86,27 @@ func (m *Engine) subscriptionResponse(request *protocol.Message) (protocol.Messa
 
 func (m *Engine) SubscribeClient(request *protocol.Message, client *protocol.Client) {
 	response, subs := m.subscriptionResponse(request)
+	patterns := []string{}
 	for _, s := range subs {
 		if !protocol.NewChannel(s).IsService() {
 			m.logger.Debugf("SUBSCRIBE %s subscription: %v", client.Id(), s)
-			m.clients.AddSubscription(client, []string{s})
+			patterns = append(patterns, s)
 		}
 	}
-
+	m.clients.AddSubscription(client, patterns)
 	client.Send(response, request.Jsonp())
 }
 
 func (m *Engine) UnsubscribeClient(request *protocol.Message, client *protocol.Client) {
 	response, subs := m.subscriptionResponse(request)
+	patterns := []string{}
 	for _, s := range subs {
 		if !protocol.NewChannel(s).IsService() {
 			m.logger.Debugf("UNSUBSCRIBE %s subscription: %v", client.Id(), s)
-			m.clients.RemoveSubscription(client, []string{s})
+			patterns = append(patterns, s)
 		}
 	}
-
+	m.clients.RemoveSubscription(client, patterns)
 	client.Send(response, request.Jsonp())
 }
 
