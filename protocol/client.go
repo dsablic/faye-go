@@ -14,26 +14,30 @@ type ClientCounters struct {
 	Sent   uint64
 }
 
+type stringMap map[string]struct{}
+
 type Client struct {
-	clientId    string
-	connection  Connection
-	responseMsg Message
-	mutex       sync.RWMutex
-	created     time.Time
-	logger      utils.Logger
-	counters    ClientCounters
+	clientId      int32
+	connection    Connection
+	responseMsg   Message
+	mutex         sync.RWMutex
+	created       time.Time
+	logger        utils.Logger
+	counters      ClientCounters
+	subscriptions stringMap
 }
 
-func NewClient(clientId string, logger utils.Logger) *Client {
+func NewClient(clientId int32, logger utils.Logger) *Client {
 	return &Client{
-		clientId: clientId,
-		created:  time.Now(),
-		logger:   logger,
-		counters: ClientCounters{0, 0},
+		clientId:      clientId,
+		created:       time.Now(),
+		logger:        logger,
+		counters:      ClientCounters{0, 0},
+		subscriptions: stringMap{},
 	}
 }
 
-func (c *Client) Id() string {
+func (c *Client) Id() int32 {
 	return c.clientId
 }
 
@@ -47,7 +51,7 @@ func (c *Client) Connect(timeout int, interval int, responseMsg Message, connect
 			if c.isConnected() {
 				connection.Send([]Message{responseMsg})
 			} else {
-				c.logger.Debugf("No longer connected %s", c.clientId)
+				c.logger.Debugf("No longer connected %d", c.clientId)
 			}
 		}()
 	}
@@ -71,6 +75,12 @@ func (c *Client) ResetCounters() ClientCounters {
 	}
 }
 
+func (c *Client) Close() {
+	if c.isConnected() {
+		c.Close()
+	}
+}
+
 func (c *Client) Send(msg Message, jsonp string) bool {
 	if c.isConnected() {
 		c.mutex.Lock()
@@ -79,7 +89,7 @@ func (c *Client) Send(msg Message, jsonp string) bool {
 		if c.connection.IsSingleShot() {
 			msgs = append(msgs, c.responseMsg)
 		}
-		c.logger.Debugf("Sending %d msgs to %s on %s", len(msgs), c.clientId, reflect.TypeOf(c.connection))
+		c.logger.Debugf("Sending %d msgs to %d on %s", len(msgs), c.clientId, reflect.TypeOf(c.connection))
 
 		var err error
 
@@ -90,7 +100,7 @@ func (c *Client) Send(msg Message, jsonp string) bool {
 		}
 
 		if err != nil {
-			c.logger.Debugf("Was unable to send %d messages to %s", len(msgs), c.clientId)
+			c.logger.Debugf("Was unable to send %d messages to %d", len(msgs), c.clientId)
 			c.connection.Close()
 			atomic.AddUint64(&c.counters.Failed, 1)
 			return false
@@ -100,7 +110,7 @@ func (c *Client) Send(msg Message, jsonp string) bool {
 		return true
 	}
 
-	c.logger.Debugf("Not connected for %s", c.clientId)
+	c.logger.Debugf("Not connected for %d", c.clientId)
 	atomic.AddUint64(&c.counters.Failed, 1)
 	return false
 }
@@ -109,4 +119,36 @@ func (c *Client) isConnected() bool {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	return c.connection != nil && c.connection.IsConnected()
+}
+
+func (c *Client) Subscribe(patterns []string) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	for _, pattern := range patterns {
+		c.subscriptions[pattern] = struct{}{}
+	}
+}
+
+func (c *Client) Unsubscribe(patterns []string) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	for _, pattern := range patterns {
+		if _, ok := c.subscriptions[pattern]; ok {
+			delete(c.subscriptions, pattern)
+		}
+	}
+}
+
+func (c *Client) Subscriptions() []string {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	patterns := make([]string, 0, len(c.subscriptions))
+	for k := range c.subscriptions {
+		patterns = append(patterns, k)
+	}
+
+	return patterns
 }

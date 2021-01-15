@@ -1,5 +1,11 @@
 package protocol
 
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
+
 const BayeuxVersion = "1.0"
 
 type Advice struct {
@@ -19,11 +25,12 @@ func (m Message) Channel() Channel {
 	return Channel{}
 }
 
-func (m Message) ClientId() string {
-	if id, ok := m["clientId"].(string); ok {
-		return id
+func (m Message) ClientId() int32 {
+	if clientId, ok := m["clientId"].(string); ok {
+		id, _ := strconv.ParseInt(strings.Replace(clientId, "client-", "", 1), 10, 32)
+		return int32(id)
 	}
-	return ""
+	return -1
 }
 
 func (m Message) Jsonp() string {
@@ -33,8 +40,8 @@ func (m Message) Jsonp() string {
 	return ""
 }
 
-func (m Message) SetClientId(clientId string) {
-	m["clientId"] = clientId
+func (m Message) SetClientId(clientId int32) {
+	m["clientId"] = fmt.Sprintf("client-%d", clientId)
 }
 
 func (m Message) Update(update Message) {

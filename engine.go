@@ -8,47 +8,47 @@ import (
 	"github.com/dsablic/faye-go/memory"
 	"github.com/dsablic/faye-go/protocol"
 	"github.com/dsablic/faye-go/utils"
-	uuid "github.com/satori/go.uuid"
 )
 
 type Counters struct {
-	Published            uint
-	Sent                 uint
-	Clients              uint
-	Failed               uint
-	PatternsBySubscriber uint
-	SubscriberByPattern  uint
+	Published           uint
+	Sent                uint
+	Clients             uint
+	Failed              uint
+	SubscriberByPattern uint
 }
 
 type Engine struct {
-	statistics   chan Counters
-	clients      *memory.ClientRegister
-	logger       utils.Logger
-	published    uint64
-	reapInterval time.Duration
-	ticker       *time.Ticker
+	statistics      chan Counters
+	clients         *memory.ClientRegister
+	logger          utils.Logger
+	published       uint64
+	reapInterval    time.Duration
+	ticker          *time.Ticker
+	currentClientID int32
 }
 
 func NewEngine(logger utils.Logger, reapInterval time.Duration, statistics chan Counters) *Engine {
 	engine := &Engine{
-		statistics:   statistics,
-		clients:      memory.NewClientRegister(),
-		logger:       logger,
-		published:    0,
-		reapInterval: reapInterval,
-		ticker:       time.NewTicker(reapInterval),
+		statistics:      statistics,
+		clients:         memory.NewClientRegister(),
+		logger:          logger,
+		published:       0,
+		reapInterval:    reapInterval,
+		ticker:          time.NewTicker(reapInterval),
+		currentClientID: 0,
 	}
 	go engine.reap()
 	return engine
 }
 
-func (m *Engine) GetClient(clientId string) *protocol.Client {
+func (m *Engine) GetClient(clientId int32) *protocol.Client {
 	return m.clients.GetClient(clientId)
 }
 
 func (m *Engine) NewClient(conn protocol.Connection) *protocol.Client {
 	newClient := protocol.NewClient(
-		uuid.NewV4().String(),
+		atomic.AddInt32(&m.currentClientID, 1),
 		m.logger)
 	m.clients.AddClient(newClient)
 	return newClient
@@ -89,10 +89,11 @@ func (m *Engine) SubscribeClient(request *protocol.Message, client *protocol.Cli
 	patterns := []string{}
 	for _, s := range subs {
 		if !protocol.NewChannel(s).IsService() {
-			m.logger.Debugf("SUBSCRIBE %s subscription: %v", client.Id(), s)
+			m.logger.Debugf("SUBSCRIBE %d subscription: %v", client.Id(), s)
 			patterns = append(patterns, s)
 		}
 	}
+	client.Subscribe(patterns)
 	m.clients.AddSubscription(client, patterns)
 	client.Send(response, request.Jsonp())
 }
@@ -102,10 +103,11 @@ func (m *Engine) UnsubscribeClient(request *protocol.Message, client *protocol.C
 	patterns := []string{}
 	for _, s := range subs {
 		if !protocol.NewChannel(s).IsService() {
-			m.logger.Debugf("UNSUBSCRIBE %s subscription: %v", client.Id(), s)
+			m.logger.Debugf("UNSUBSCRIBE %d subscription: %v", client.Id(), s)
 			patterns = append(patterns, s)
 		}
 	}
+	client.Unsubscribe(patterns)
 	m.clients.RemoveSubscription(client, patterns)
 	client.Send(response, request.Jsonp())
 }
@@ -114,7 +116,7 @@ func (m *Engine) Disconnect(request *protocol.Message, client *protocol.Client, 
 	response := m.responseFromRequest(request)
 	response["successful"] = true
 	clientId := request.ClientId()
-	m.logger.Debugf("Client %s disconnected", clientId)
+	m.logger.Debugf("Client %d disconnected", clientId)
 }
 
 func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
@@ -133,31 +135,30 @@ func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
 	msg["channel"] = channel.Name()
 	msg["data"] = data
 	msg.SetClientId(request.ClientId())
-	m.logger.Debugf("PUBLISH from %s on %s", request.ClientId(), channel)
+	m.logger.Debugf("PUBLISH from %d on %s", request.ClientId(), channel)
 	go func() {
 		m.clients.Publish(msg)
 		atomic.AddUint64(&m.published, 1)
 	}()
 }
 
-func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) string {
-	newClientId := ""
+func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) int32 {
+	var newClientId int32
 	version := (*request)["version"].(string)
 
 	response := m.responseFromRequest(request)
 	response["successful"] = false
 	if version == protocol.BayeuxVersion {
 		newClientId = m.NewClient(conn).Id()
-
-		response.Update(protocol.Message{
-			"clientId":                 newClientId,
+		update := protocol.Message{
 			"channel":                  protocol.MetaPrefix + protocol.MetaHandshakeChannel,
 			"version":                  protocol.BayeuxVersion,
 			"advice":                   protocol.DefaultAdvice,
 			"supportedConnectionTypes": []string{"websocket"},
 			"successful":               true,
-		})
-
+		}
+		update.SetClientId(newClientId)
+		response.Update(update)
 	} else {
 		response["error"] = fmt.Sprintf("Only supported version is '%s'", protocol.BayeuxVersion)
 	}
@@ -179,7 +180,6 @@ func (m *Engine) reap() {
 		c.Sent = uint(registerCounters.TotalSent)
 		c.Published = uint(atomic.SwapUint64(&m.published, 0))
 		c.SubscriberByPattern = uint(registerCounters.SubscriberByPatternCount)
-		c.PatternsBySubscriber = uint(registerCounters.PatternsBySubscriberCount)
 		select {
 		case m.statistics <- c:
 		default:

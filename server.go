@@ -78,8 +78,7 @@ InvalidMessage:
 }
 
 func (s *Server) getClient(request *protocol.Message, conn protocol.Connection) *protocol.Client {
-	clientId := request.ClientId()
-	return s.engine.GetClient(clientId)
+	return s.engine.GetClient(request.ClientId())
 }
 
 func (s *Server) handleMessage(msg *protocol.Message, conn protocol.Connection) {
