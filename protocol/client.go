@@ -77,7 +77,9 @@ func (c *Client) ResetCounters() ClientCounters {
 
 func (c *Client) Close() {
 	if c.isConnected() {
-		c.Close()
+		c.mutex.Lock()
+		defer c.mutex.Unlock()
+		c.connection.Close()
 	}
 }
 
@@ -115,12 +117,6 @@ func (c *Client) Send(msg Message, jsonp string) bool {
 	return false
 }
 
-func (c *Client) isConnected() bool {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-	return c.connection != nil && c.connection.IsConnected()
-}
-
 func (c *Client) Subscribe(patterns []string) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
@@ -151,4 +147,10 @@ func (c *Client) Subscriptions() []string {
 	}
 
 	return patterns
+}
+
+func (c *Client) isConnected() bool {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	return c.connection != nil && c.connection.IsConnected()
 }
