@@ -71,7 +71,7 @@ func (cr *ClientRegister) Reap() *ClientRegisterCounters {
 	dead := []int32{}
 	for id, client := range cr.clients {
 		if client.ShouldReap() {
-			cr.subscriptions.RemoveClient(client, client.Subscriptions())
+			cr.subscriptions.RemoveSubscription(client, client.Subscriptions())
 			dead = append(dead, id)
 		}
 		c := client.ResetCounters()

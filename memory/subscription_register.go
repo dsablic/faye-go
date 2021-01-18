@@ -44,8 +44,11 @@ func (sr *SubscriptionRegister) RemoveSubscription(subscriber interface{}, patte
 	defer sr.mutex.Unlock()
 
 	for _, pattern := range patterns {
-		if p, ok := sr.subscriberByPattern[pattern]; ok {
-			delete(p, subscriber)
+		if subscribers, ok := sr.subscriberByPattern[pattern]; ok {
+			delete(subscribers, subscriber)
+			if len(subscribers) == 0 {
+				delete(sr.subscriberByPattern, pattern)
+			}
 		}
 	}
 	sr.updateCounts()
@@ -64,19 +67,4 @@ func (sr *SubscriptionRegister) GetSubscribers(patterns []string) []interface{} 
 		}
 	}
 	return arr
-}
-
-func (sr *SubscriptionRegister) RemoveClient(subscriber interface{}, patterns []string) {
-	sr.mutex.Lock()
-	defer sr.mutex.Unlock()
-
-	for _, pattern := range patterns {
-		if subscribers, ok := sr.subscriberByPattern[pattern]; ok {
-			delete(subscribers, subscriber)
-			if len(subscribers) == 0 {
-				delete(sr.subscriberByPattern, pattern)
-			}
-		}
-	}
-	sr.updateCounts()
 }

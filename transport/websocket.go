@@ -8,6 +8,7 @@ import (
 	"github.com/dsablic/faye-go/protocol"
 	"github.com/dsablic/faye-go/utils"
 	"github.com/gorilla/websocket"
+	"github.com/uber-go/atomic"
 )
 
 type Server interface {
@@ -17,16 +18,16 @@ type Server interface {
 
 type WebSocketConnection struct {
 	ws     *websocket.Conn
-	failed bool
+	failed *atomic.Bool
 	mutex  sync.RWMutex
 }
 
 func (wc *WebSocketConnection) Send(msgs []protocol.Message) error {
 	wc.mutex.Lock()
-	defer wc.mutex.Unlock()
 	err := wc.ws.WriteJSON(msgs)
+	wc.mutex.Unlock()
 	if err != nil {
-		wc.failed = true
+		wc.failed.Store(true)
 	}
 	return err
 }
@@ -36,9 +37,7 @@ func (wc *WebSocketConnection) SendJsonp(msgs []protocol.Message, _ string) erro
 }
 
 func (wc *WebSocketConnection) IsConnected() bool {
-	wc.mutex.RLock()
-	defer wc.mutex.RUnlock()
-	return !wc.failed
+	return !wc.failed.Load()
 }
 
 func (wc *WebSocketConnection) Close() {
@@ -52,13 +51,11 @@ func (wc *WebSocketConnection) IsSingleShot() bool {
 func WebsocketServer(m Server) func(*websocket.Conn) {
 	return func(ws *websocket.Conn) {
 		var data interface{}
-		wsConn := WebSocketConnection{ws: ws, failed: false}
+		wsConn := WebSocketConnection{ws: ws, failed: atomic.NewBool(false)}
 		for {
 			err := ws.ReadJSON(&data)
 			if err != nil {
-				wsConn.mutex.Lock()
-				wsConn.failed = true
-				wsConn.mutex.Unlock()
+				wsConn.failed.Store(true)
 				ws.Close()
 				if err == io.EOF {
 					m.Logger().Debugf("EOF while reading from socket")
