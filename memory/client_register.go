@@ -15,13 +15,13 @@ type ClientRegisterCounters struct {
 
 type ClientRegister struct {
 	mutex         sync.RWMutex
-	clients       map[int32]*protocol.Client
+	clients       map[uint32]*protocol.Client
 	subscriptions *SubscriptionRegister
 }
 
 func NewClientRegister() *ClientRegister {
 	return &ClientRegister{
-		clients:       make(map[int32]*protocol.Client),
+		clients:       make(map[uint32]*protocol.Client),
 		subscriptions: NewSubscriptionRegister(),
 	}
 }
@@ -37,7 +37,7 @@ func (cr *ClientRegister) AddClient(client *protocol.Client) {
 	cr.mutex.Unlock()
 }
 
-func (cr *ClientRegister) GetClient(clientId int32) *protocol.Client {
+func (cr *ClientRegister) GetClient(clientId uint32) *protocol.Client {
 	cr.mutex.RLock()
 	defer cr.mutex.RUnlock()
 	client, ok := cr.clients[clientId]
@@ -74,7 +74,7 @@ func (cr *ClientRegister) Reap() *ClientRegisterCounters {
 	totals := ClientRegisterCounters{0, 0, 0, 0}
 	cr.mutex.RLock()
 	totals.SubscriberByPatternCount = cr.subscriptions.SubscriberByPatternCount.Load()
-	dead := []int32{}
+	dead := []uint32{}
 	for id, client := range cr.clients {
 		if client.ShouldReap() {
 			cr.subscriptions.RemoveSubscription(client, client.Subscriptions())

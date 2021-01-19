@@ -17,7 +17,7 @@ type ClientCounters struct {
 type stringMap map[string]struct{}
 
 type Client struct {
-	clientId      int32
+	clientId      uint32
 	connection    Connection
 	responseMsg   Message
 	mutex         sync.RWMutex
@@ -27,7 +27,7 @@ type Client struct {
 	subscriptions stringMap
 }
 
-func NewClient(clientId int32, logger utils.Logger) *Client {
+func NewClient(clientId uint32, logger utils.Logger) *Client {
 	return &Client{
 		clientId:      clientId,
 		created:       time.Now(),
@@ -37,7 +37,7 @@ func NewClient(clientId int32, logger utils.Logger) *Client {
 	}
 }
 
-func (c *Client) Id() int32 {
+func (c *Client) Id() uint32 {
 	return c.clientId
 }
 

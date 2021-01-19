@@ -25,12 +25,12 @@ func (m Message) Channel() Channel {
 	return Channel{}
 }
 
-func (m Message) ClientId() int32 {
+func (m Message) ClientId() uint32 {
 	if clientId, ok := m["clientId"].(string); ok {
 		id, _ := strconv.ParseInt(strings.Replace(clientId, "client-", "", 1), 10, 32)
-		return int32(id)
+		return uint32(id)
 	}
-	return -1
+	return 0
 }
 
 func (m Message) Jsonp() string {
@@ -40,7 +40,7 @@ func (m Message) Jsonp() string {
 	return ""
 }
 
-func (m Message) SetClientId(clientId int32) {
+func (m Message) SetClientId(clientId uint32) {
 	m["clientId"] = fmt.Sprintf("client-%d", clientId)
 }
 

@@ -25,7 +25,7 @@ type Engine struct {
 	published       uint64
 	reapInterval    time.Duration
 	ticker          *time.Ticker
-	currentClientID int32
+	currentClientID uint32
 }
 
 func NewEngine(logger utils.Logger, reapInterval time.Duration, statistics chan Counters) *Engine {
@@ -42,13 +42,14 @@ func NewEngine(logger utils.Logger, reapInterval time.Duration, statistics chan 
 	return engine
 }
 
-func (m *Engine) GetClient(clientId int32) *protocol.Client {
+func (m *Engine) GetClient(clientId uint32) *protocol.Client {
 	return m.clients.GetClient(clientId)
 }
 
 func (m *Engine) NewClient(conn protocol.Connection) *protocol.Client {
+	atomic.CompareAndSwapUint32(&m.currentClientID, 4294967295, 0)
 	newClient := protocol.NewClient(
-		atomic.AddInt32(&m.currentClientID, 1),
+		atomic.AddUint32(&m.currentClientID, 1),
 		m.logger)
 	m.clients.AddClient(newClient)
 	return newClient
@@ -140,8 +141,8 @@ func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
 	atomic.AddUint64(&m.published, 1)
 }
 
-func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) int32 {
-	var newClientId int32
+func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) uint32 {
+	var newClientId uint32
 	version := (*request)["version"].(string)
 
 	response := m.responseFromRequest(request)
