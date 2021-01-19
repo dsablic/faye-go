@@ -118,8 +118,8 @@ func (c *Client) Send(msg Message, jsonp string) bool {
 }
 
 func (c *Client) Subscribe(patterns []string) {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 
 	for _, pattern := range patterns {
 		c.subscriptions[pattern] = struct{}{}
@@ -127,8 +127,8 @@ func (c *Client) Subscribe(patterns []string) {
 }
 
 func (c *Client) Unsubscribe(patterns []string) {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 
 	for _, pattern := range patterns {
 		if _, ok := c.subscriptions[pattern]; ok {
