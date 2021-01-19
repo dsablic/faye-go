@@ -136,10 +136,8 @@ func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
 	msg["data"] = data
 	msg.SetClientId(request.ClientId())
 	m.logger.Debugf("PUBLISH from %d on %s", request.ClientId(), channel)
-	go func() {
-		m.clients.Publish(msg)
-		atomic.AddUint64(&m.published, 1)
-	}()
+	m.clients.Publish(msg)
+	atomic.AddUint64(&m.published, 1)
 }
 
 func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) int32 {

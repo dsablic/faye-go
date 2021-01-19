@@ -56,12 +56,18 @@ func (cr *ClientRegister) RemoveSubscription(client *protocol.Client, patterns [
 }
 
 func (cr *ClientRegister) Publish(msg protocol.Message) {
-	cr.mutex.RLock()
-	defer cr.mutex.RUnlock()
 	patterns := msg.Channel().Expand()
-	for _, client := range cr.subscriptions.GetSubscribers(patterns) {
-		client.(*protocol.Client).Send(msg, "")
+	subscribers := cr.subscriptions.GetSubscribers(patterns)
+	if len(subscribers) == 0 {
+		return
 	}
+	go func() {
+		cr.mutex.RLock()
+		defer cr.mutex.RUnlock()
+		for _, client := range subscribers {
+			client.(*protocol.Client).Send(msg, "")
+		}
+	}()
 }
 
 func (cr *ClientRegister) Reap() *ClientRegisterCounters {
