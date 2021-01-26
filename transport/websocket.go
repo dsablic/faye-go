@@ -23,6 +23,9 @@ type WebSocketConnection struct {
 }
 
 func (wc *WebSocketConnection) Send(msgs []protocol.Message) error {
+	if !wc.IsConnected() {
+		return errors.New("Not connected")
+	}
 	wc.mutex.Lock()
 	err := wc.ws.WriteJSON(msgs)
 	wc.mutex.Unlock()
@@ -41,6 +44,7 @@ func (wc *WebSocketConnection) IsConnected() bool {
 }
 
 func (wc *WebSocketConnection) Close() {
+	wc.failed.Store(true)
 	wc.ws.Close()
 }
 
@@ -67,7 +71,9 @@ func WebsocketServer(m Server) func(*websocket.Conn) {
 
 			if arr := data.([]interface{}); len(arr) == 0 {
 				wsConn.mutex.Lock()
-				ws.WriteJSON([]string{})
+				if ws.WriteJSON([]string{}) != nil {
+					wsConn.Close()
+				}
 				wsConn.mutex.Unlock()
 			} else {
 				m.HandleRequest(data, &wsConn)
