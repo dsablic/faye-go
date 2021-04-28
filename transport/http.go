@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"github.com/dsablic/faye-go/protocol"
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 )
 
 type LongPollingConnection struct {
