@@ -8,7 +8,7 @@ import (
 	"github.com/dsablic/faye-go/protocol"
 	"github.com/dsablic/faye-go/utils"
 	"github.com/gorilla/websocket"
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 )
 
 type Server interface {

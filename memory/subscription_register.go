@@ -3,7 +3,7 @@ package memory
 import (
 	"sync"
 
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 )
 
 type interfaceMap map[interface{}]struct{}
