@@ -2,6 +2,7 @@ package faye
 
 import (
 	"fmt"
+	"math"
 	"sync/atomic"
 	"time"
 
@@ -47,7 +48,7 @@ func (m *Engine) GetClient(clientId uint32) *protocol.Client {
 }
 
 func (m *Engine) NewClient(conn protocol.Connection) *protocol.Client {
-	atomic.CompareAndSwapUint32(&m.currentClientID, 4294967295, 0)
+	atomic.CompareAndSwapUint32(&m.currentClientID, math.MaxUint32, 0)
 	newClient := protocol.NewClient(
 		atomic.AddUint32(&m.currentClientID, 1),
 		m.logger)
@@ -75,11 +76,17 @@ func (m *Engine) subscriptionResponse(request *protocol.Message) (protocol.Messa
 	response["subscription"] = subscription
 
 	var subs []string
-	switch subscription.(type) {
+	switch v := subscription.(type) {
 	case []string:
-		subs = subscription.([]string)
+		subs = v
+	case []interface{}:
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				subs = append(subs, s)
+			}
+		}
 	case string:
-		subs = []string{subscription.(string)}
+		subs = []string{v}
 	}
 
 	return response, subs
@@ -118,6 +125,7 @@ func (m *Engine) Disconnect(request *protocol.Message, client *protocol.Client, 
 	response["successful"] = true
 	clientId := request.ClientId()
 	m.logger.Debugf("Client %d disconnected", clientId)
+	_ = response
 }
 
 func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
@@ -143,7 +151,8 @@ func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
 
 func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) uint32 {
 	var newClientId uint32
-	version := (*request)["version"].(string)
+
+	version, _ := (*request)["version"].(string)
 
 	response := m.responseFromRequest(request)
 	response["successful"] = false
@@ -190,8 +199,8 @@ func (m *Engine) reap() {
 func (m *Engine) responseFromRequest(request *protocol.Message) protocol.Message {
 	response := protocol.Message{}
 	response["channel"] = request.Channel().Name()
-	if reqId, ok := (*request)["id"]; ok {
-		response["id"] = reqId.(string)
+	if reqId, ok := (*request)["id"].(string); ok {
+		response["id"] = reqId
 	}
 
 	return response

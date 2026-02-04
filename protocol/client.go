@@ -46,14 +46,18 @@ func (c *Client) Connect(timeout int, interval int, responseMsg Message, connect
 	defer c.mutex.Unlock()
 
 	if timeout > 0 {
-		go func() {
+		clientId := c.clientId
+		logger := c.logger
+		go func(conn Connection, msg Message) {
 			time.Sleep(time.Duration(timeout) * time.Millisecond)
 			if c.isConnected() {
-				connection.Send([]Message{responseMsg})
+				if err := conn.Send([]Message{msg}); err != nil {
+					logger.Debugf("Failed to send connect response to %d: %v", clientId, err)
+				}
 			} else {
-				c.logger.Debugf("No longer connected %d", c.clientId)
+				logger.Debugf("No longer connected %d", clientId)
 			}
-		}()
+		}(connection, responseMsg)
 	}
 	c.responseMsg = responseMsg
 }

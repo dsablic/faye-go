@@ -24,7 +24,7 @@ type WebSocketConnection struct {
 
 func (wc *WebSocketConnection) Send(msgs []protocol.Message) error {
 	if !wc.IsConnected() {
-		return errors.New("Not connected")
+		return errors.New("not connected")
 	}
 	wc.mutex.Lock()
 	err := wc.ws.WriteJSON(msgs)
@@ -36,7 +36,7 @@ func (wc *WebSocketConnection) Send(msgs []protocol.Message) error {
 }
 
 func (wc *WebSocketConnection) SendJsonp(msgs []protocol.Message, _ string) error {
-	return errors.New("Jsonp is not supported over websockets")
+	return errors.New("jsonp is not supported over websockets")
 }
 
 func (wc *WebSocketConnection) IsConnected() bool {
@@ -69,7 +69,13 @@ func WebsocketServer(m Server) func(*websocket.Conn) {
 				return
 			}
 
-			if arr := data.([]interface{}); len(arr) == 0 {
+			arr, ok := data.([]interface{})
+			if !ok {
+				m.HandleRequest(data, &wsConn)
+				continue
+			}
+
+			if len(arr) == 0 {
 				wsConn.mutex.Lock()
 				if ws.WriteJSON([]string{}) != nil {
 					wsConn.Close()

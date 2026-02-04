@@ -5,10 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 
 	"github.com/dsablic/faye-go/protocol"
 	"go.uber.org/atomic"
 )
+
+var validJSONPCallback = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_.]*$`)
 
 type LongPollingConnection struct {
 	responseChan chan []protocol.Message
@@ -25,7 +28,7 @@ func (lp *LongPollingConnection) enqueueMessages(msgs []protocol.Message) error 
 	case lp.responseChan <- msgs:
 		return nil
 	default:
-		return errors.New("Response channel is full")
+		return errors.New("response channel is full")
 	}
 }
 
@@ -52,6 +55,13 @@ func (lp *LongPollingConnection) IsSingleShot() bool {
 	return true
 }
 
+func isValidJSONPCallback(callback string) bool {
+	if len(callback) > 128 {
+		return false
+	}
+	return validJSONPCallback.MatchString(callback)
+}
+
 func MakeLongPoll(msgs interface{}, server Server, w http.ResponseWriter) {
 	conn := NewLongPollingConnection()
 	done := make(chan bool, 1)
@@ -62,20 +72,27 @@ func MakeLongPoll(msgs interface{}, server Server, w http.ResponseWriter) {
 
 	select {
 	case responseMsgs := <-conn.responseChan:
-		if bs, err := json.Marshal(responseMsgs); err != nil {
+		bs, err := json.Marshal(responseMsgs)
+		if err != nil {
 			server.Logger().Warnf("While encoding response msgs: %s", err)
+			return
+		}
+
+		connJsonp := conn.jsonp.Load()
+		if connJsonp != "" {
+			if !isValidJSONPCallback(connJsonp) {
+				server.Logger().Warnf("Invalid JSONP callback name: %s", connJsonp)
+				http.Error(w, "Invalid JSONP callback", http.StatusBadRequest)
+				return
+			}
+			jsonp := fmt.Sprintf("/**/%s(%s)", connJsonp, string(bs))
+			bs = []byte(jsonp)
+			w.Header().Add("Content-Type", "text/javascript")
 		} else {
-			connJsonp := conn.jsonp.Load()
-			if connJsonp != "" {
-				jsonp := fmt.Sprintf("/**/%v(%v)", connJsonp, string(bs))
-				bs = []byte(jsonp)
-				w.Header().Add("Content-Type", "text/javascript")
-			} else {
-				w.Header().Add("Content-Type", "application/json")
-			}
-			if _, err := w.Write(bs); err != nil {
-				server.Logger().Warnf("While writing HTTP response: %s", err)
-			}
+			w.Header().Add("Content-Type", "application/json")
+		}
+		if _, err := w.Write(bs); err != nil {
+			server.Logger().Warnf("While writing HTTP response: %s", err)
 		}
 	case <-done:
 		server.Logger().Debugf("No response")

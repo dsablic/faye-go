@@ -61,13 +61,23 @@ func (cr *ClientRegister) Publish(msg protocol.Message) {
 	if len(subscribers) == 0 {
 		return
 	}
-	go func() {
-		cr.mutex.RLock()
-		defer cr.mutex.RUnlock()
-		for _, client := range subscribers {
-			client.(*protocol.Client).Send(msg, "")
+
+	clients := make([]*protocol.Client, 0, len(subscribers))
+	for _, sub := range subscribers {
+		if client, ok := sub.(*protocol.Client); ok {
+			clients = append(clients, client)
 		}
-	}()
+	}
+
+	if len(clients) == 0 {
+		return
+	}
+
+	go func(clients []*protocol.Client, msg protocol.Message) {
+		for _, client := range clients {
+			client.Send(msg, "")
+		}
+	}(clients, msg)
 }
 
 func (cr *ClientRegister) Reap() *ClientRegisterCounters {

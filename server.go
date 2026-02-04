@@ -2,6 +2,7 @@ package faye
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
 
 	"github.com/dsablic/faye-go/protocol"
@@ -28,53 +29,60 @@ func NewServer(logger utils.Logger, engine *Engine, validator Validator) *Server
 }
 
 func (s *Server) HandleRequest(msges interface{}, conn protocol.Connection) {
-	switch msges.(type) {
+	if err := s.handleRequestInternal(msges, conn); err != nil {
+		s.logger.Debugf("Invalid message %v: %v", msges, err)
+		s.respondWithError(conn, "Invalid message")
+	}
+}
+
+func (s *Server) handleRequestInternal(msges interface{}, conn protocol.Connection) error {
+	switch v := msges.(type) {
 	case []interface{}:
-		for _, msg := range msges.([]interface{}) {
-			var m protocol.Message = msg.(map[string]interface{})
-			s.handleMessage(&m, conn)
-			return
+		for _, msg := range v {
+			m, ok := msg.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("message is not a map: %T", msg)
+			}
+			var pm protocol.Message = m
+			s.handleMessage(&pm, conn)
+			return nil
 		}
 	case map[string]interface{}:
-		var m protocol.Message = msges.(map[string]interface{})
+		var m protocol.Message = v
 		if nested, ok := m["message"]; ok {
-			switch nested.(type) {
+			switch nestedVal := nested.(type) {
 			case string:
-				var data interface{}
-				if err := json.Unmarshal([]byte(nested.(string)), &data); err != nil {
-					goto InvalidMessage
+				var data map[string]interface{}
+				if err := json.Unmarshal([]byte(nestedVal), &data); err != nil {
+					return fmt.Errorf("failed to unmarshal nested message: %w", err)
 				}
-				m = data.(map[string]interface{})
+				m = data
 			case map[string]interface{}:
-				m = nested.(map[string]interface{})
+				m = nestedVal
 			default:
-				goto InvalidMessage
+				return fmt.Errorf("unexpected nested message type: %T", nested)
 			}
 		}
 		s.handleMessage(&m, conn)
-		return
+		return nil
 	case url.Values:
 		var msgList []map[string]interface{}
-		vals := msges.(url.Values)
-		message := vals.Get("message")
+		message := v.Get("message")
 		if err := json.Unmarshal([]byte(message), &msgList); err != nil {
 			var single map[string]interface{}
 			if err := json.Unmarshal([]byte(message), &single); err != nil {
-				goto InvalidMessage
-			} else {
-				msgList = append(msgList, single)
+				return fmt.Errorf("failed to unmarshal message: %w", err)
 			}
+			msgList = append(msgList, single)
 		}
 		for _, msg := range msgList {
-			msg["jsonp"] = vals.Get("jsonp")
+			msg["jsonp"] = v.Get("jsonp")
 			var m protocol.Message = msg
 			s.handleMessage(&m, conn)
 		}
-		return
+		return nil
 	}
-InvalidMessage:
-	s.logger.Debugf("Invalid message %v", msges)
-	s.respondWithError(conn, "Invalid message")
+	return fmt.Errorf("unexpected message type: %T", msges)
 }
 
 func (s *Server) getClient(request *protocol.Message, conn protocol.Connection) *protocol.Client {
@@ -95,45 +103,43 @@ func (s *Server) handleMessage(msg *protocol.Message, conn protocol.Connection) 
 	}
 }
 
-func (s *Server) handleMeta(msg *protocol.Message, conn protocol.Connection) protocol.Message {
-	meta_channel := msg.Channel().MetaType()
+func (s *Server) handleMeta(msg *protocol.Message, conn protocol.Connection) {
+	metaChannel := msg.Channel().MetaType()
 
-	if meta_channel == protocol.MetaHandshakeChannel {
+	if metaChannel == protocol.MetaHandshakeChannel {
 		s.engine.Handshake(msg, conn)
-	} else {
-		client := s.getClient(msg, conn)
-		if client != nil {
-			client.SetConnection(conn)
-
-			switch meta_channel {
-			case protocol.MetaHandshakeChannel:
-				s.engine.Handshake(msg, conn)
-			case protocol.MetaConnectChannel:
-				s.engine.Connect(msg, client, conn)
-			case protocol.MetaDisconnectChannel:
-				s.engine.Disconnect(msg, client, conn)
-			case protocol.MetaUnsubscribeChannel:
-				s.engine.UnsubscribeClient(msg, client)
-			case protocol.MetaSubscribeChannel:
-				if s.validator.SubscribeValid(msg) {
-					s.engine.SubscribeClient(msg, client)
-				} else {
-					s.logger.Warnf("Invalid subscription %v", msg)
-					s.respondWithError(conn, "Invalid subscription")
-				}
-			case protocol.MetaUnknownChannel:
-				s.logger.Errorf("Message with unknown meta channel received")
-			}
-		} else {
-			s.logger.Debugf("Message %v from unknown client %v", msg.Channel(), msg.ClientId())
-			response := *msg
-			response["successful"] = false
-			response["advice"] = map[string]interface{}{"reconnect": "handshake", "interval": 1000}
-			conn.Send([]protocol.Message{response})
-		}
+		return
 	}
 
-	return nil
+	client := s.getClient(msg, conn)
+	if client == nil {
+		s.logger.Debugf("Message %v from unknown client %v", msg.Channel(), msg.ClientId())
+		response := *msg
+		response["successful"] = false
+		response["advice"] = map[string]interface{}{"reconnect": "handshake", "interval": 1000}
+		conn.Send([]protocol.Message{response})
+		return
+	}
+
+	client.SetConnection(conn)
+
+	switch metaChannel {
+	case protocol.MetaConnectChannel:
+		s.engine.Connect(msg, client, conn)
+	case protocol.MetaDisconnectChannel:
+		s.engine.Disconnect(msg, client, conn)
+	case protocol.MetaUnsubscribeChannel:
+		s.engine.UnsubscribeClient(msg, client)
+	case protocol.MetaSubscribeChannel:
+		if s.validator.SubscribeValid(msg) {
+			s.engine.SubscribeClient(msg, client)
+		} else {
+			s.logger.Warnf("Invalid subscription %v", msg)
+			s.respondWithError(conn, "Invalid subscription")
+		}
+	case protocol.MetaUnknownChannel:
+		s.logger.Errorf("Message with unknown meta channel received")
+	}
 }
 
 func (s *Server) respondWithError(conn protocol.Connection, err string) {

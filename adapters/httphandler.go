@@ -9,23 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var corsHeaders = map[string]string{
-	"Access-Control-Allow-Credentials": "false",
-	"Access-Control-Allow-Headers":     "Accept, Authorization, Content-Type, Pragma, X-Requested-With",
-	"Access-Control-Allow-Methods":     "POST, GET, PUT",
-	"Access-Control-Allow-Origin":      "*",
-	"Access-Control-Max-Age":           "86400",
-}
-
-func handleOptions(w http.ResponseWriter, r *http.Request) bool {
-	if r.Method == "OPTIONS" {
-		for k, v := range corsHeaders {
-			w.Header().Add(k, v)
-		}
-		return true
-	}
-	return false
-}
+type CheckOriginFunc func(r *http.Request) bool
 
 func decode(r *http.Request) interface{} {
 	switch r.Method {
@@ -48,9 +32,21 @@ func decode(r *http.Request) interface{} {
 }
 
 func FayeHandler(server *faye.Server) http.Handler {
+	return FayeHandlerWithCheckOrigin(server, nil)
+}
+
+func FayeHandlerWithCheckOrigin(server *faye.Server, checkOrigin CheckOriginFunc) http.Handler {
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+	}
+	if checkOrigin != nil {
+		upgrader.CheckOrigin = checkOrigin
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Upgrade") == "websocket" {
-			ws, err := websocket.Upgrade(w, r, nil, 1024, 1024)
+			ws, err := upgrader.Upgrade(w, r, nil)
 			if _, ok := err.(websocket.HandshakeError); ok {
 				http.Error(w, "Not a websocket handshake", 400)
 				return
@@ -60,9 +56,6 @@ func FayeHandler(server *faye.Server) http.Handler {
 			}
 			transport.WebsocketServer(server)(ws)
 		} else {
-			if handleOptions(w, r) {
-				return
-			}
 			if body := decode(r); body != nil {
 				transport.MakeLongPoll(body, server, w)
 			} else {

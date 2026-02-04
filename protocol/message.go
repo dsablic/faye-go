@@ -27,7 +27,11 @@ func (m Message) Channel() Channel {
 
 func (m Message) ClientId() uint32 {
 	if clientId, ok := m["clientId"].(string); ok {
-		id, _ := strconv.ParseInt(strings.Replace(clientId, "client-", "", 1), 10, 32)
+		idStr := strings.TrimPrefix(clientId, "client-")
+		id, err := strconv.ParseInt(idStr, 10, 32)
+		if err != nil {
+			return 0
+		}
 		return uint32(id)
 	}
 	return 0
