@@ -1,63 +1,103 @@
-# Faye + Go
+# faye-go
 
-Major websocket-oriented rewrite of [roncohen/faye-go](https://github.com/roncohen/faye-go). Still experimental.
+A Bayeux protocol server implementation in Go, optimized for WebSocket connections.
+
+## Installation
+
+```bash
+go get github.com/dsablic/faye-go
+```
 
 ## Usage
 
 ```go
-
 package main
 
 import (
+	"log"
 	"net/http"
-	"os"
 	"time"
 
-	"github.com/apex/log"
-	"github.com/apex/log/handlers/text"
 	"github.com/dsablic/faye-go"
 	"github.com/dsablic/faye-go/adapters"
 	"github.com/dsablic/faye-go/protocol"
 )
 
-type extLogger struct {
-	*log.Logger
-}
+type logger struct{}
 
-func (l extLogger) Panicf(msg string, v ...interface{}) {
-	l.Errorf(msg, v)
-	panic(msg)
-}
+func (l logger) Debugf(msg string, v ...interface{}) { log.Printf("[DEBUG] "+msg, v...) }
+func (l logger) Infof(msg string, v ...interface{})  { log.Printf("[INFO] "+msg, v...) }
+func (l logger) Warnf(msg string, v ...interface{})  { log.Printf("[WARN] "+msg, v...) }
+func (l logger) Errorf(msg string, v ...interface{}) { log.Printf("[ERROR] "+msg, v...) }
+func (l logger) Panicf(msg string, v ...interface{}) { log.Panicf(msg, v...) }
 
-type callbacks struct{}
+type validator struct{}
 
-func (c callbacks) SubscribeValid(m *protocol.Message) bool {
-	return true
-}
-
-func (c callbacks) PublishValid(m *protocol.Message) bool {
-	return true
-}
+func (v validator) SubscribeValid(m *protocol.Message) bool { return true }
+func (v validator) PublishValid(m *protocol.Message) bool   { return true }
 
 func main() {
-	duration := time.Duration(10) * time.Second
-	ctx := log.WithFields(log.Fields{})
-	logger := extLogger{ctx.Logger}
-	log.SetHandler(text.New(os.Stdout))
+	l := logger{}
 	statistics := make(chan faye.Counters)
+
 	go func() {
-    interval := uint(duration.Seconds())
 		for c := range statistics {
-			logger.Infof("Clients = %v, Publish = %v/s, Send = %v/s, Fail = %v/s",
-				c.Clients, c.Published/interval, c.Sent/interval, c.Failed/interval)
+			log.Printf("Clients=%d Published=%d Sent=%d Failed=%d",
+				c.Clients, c.Published, c.Sent, c.Failed)
 		}
 	}()
-	engine := faye.NewEngine(logger, duration, statistics)
-	server := faye.NewServer(logger, engine, callbacks{})
+
+	engine := faye.NewEngine(l, 10*time.Second, statistics)
+	server := faye.NewServer(l, engine, validator{})
+
 	http.Handle("/bayeux", adapters.FayeHandler(server))
-	if err := http.ListenAndServe(":8000", nil); err != nil {
-		panic("ListenAndServe: " + err.Error())
-	}
+	log.Fatal(http.ListenAndServe(":8000", nil))
+}
+```
+
+## WebSocket CORS
+
+To allow cross-origin WebSocket connections, use `FayeHandlerWithCheckOrigin`:
+
+```go
+checkOrigin := func(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	// Allow specific origins
+	return origin == "https://example.com"
 }
 
+http.Handle("/bayeux", adapters.FayeHandlerWithCheckOrigin(server, checkOrigin))
 ```
+
+## Interfaces
+
+### Logger
+
+```go
+type Logger interface {
+	Debugf(msg string, v ...interface{})
+	Infof(msg string, v ...interface{})
+	Warnf(msg string, v ...interface{})
+	Errorf(msg string, v ...interface{})
+	Panicf(msg string, v ...interface{})
+}
+```
+
+### Validator
+
+```go
+type Validator interface {
+	SubscribeValid(*protocol.Message) bool
+	PublishValid(*protocol.Message) bool
+}
+```
+
+## Testing
+
+```bash
+go test ./...
+```
+
+## License
+
+MIT
