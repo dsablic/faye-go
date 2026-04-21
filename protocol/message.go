@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 )
@@ -52,4 +53,17 @@ func (m Message) Update(update Message) {
 	for k, v := range update {
 		m[k] = v
 	}
+}
+
+const requestKey = "__http_request"
+
+func (m Message) SetRequest(r *http.Request) {
+	m[requestKey] = r
+}
+
+func (m Message) Request() *http.Request {
+	if r, ok := m[requestKey].(*http.Request); ok {
+		return r
+	}
+	return nil
 }
