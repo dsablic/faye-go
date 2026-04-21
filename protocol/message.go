@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -53,6 +54,16 @@ func (m Message) Update(update Message) {
 	for k, v := range update {
 		m[k] = v
 	}
+}
+
+func (m Message) MarshalJSON() ([]byte, error) {
+	filtered := make(map[string]interface{}, len(m))
+	for k, v := range m {
+		if k != requestKey {
+			filtered[k] = v
+		}
+	}
+	return json.Marshal(filtered)
 }
 
 const requestKey = "__http_request"
