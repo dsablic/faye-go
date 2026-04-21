@@ -3,6 +3,7 @@ package transport
 import (
 	"errors"
 	"io"
+	"net/http"
 	"sync"
 
 	"github.com/dsablic/faye-go/protocol"
@@ -12,7 +13,7 @@ import (
 )
 
 type Server interface {
-	HandleRequest(interface{}, protocol.Connection)
+	HandleRequest(interface{}, protocol.Connection, *http.Request)
 	Logger() utils.Logger
 }
 
@@ -71,7 +72,7 @@ func WebsocketServer(m Server) func(*websocket.Conn) {
 
 			arr, ok := data.([]interface{})
 			if !ok {
-				m.HandleRequest(data, &wsConn)
+				m.HandleRequest(data, &wsConn, nil)
 				continue
 			}
 
@@ -82,7 +83,7 @@ func WebsocketServer(m Server) func(*websocket.Conn) {
 				}
 				wsConn.mutex.Unlock()
 			} else {
-				m.HandleRequest(data, &wsConn)
+				m.HandleRequest(data, &wsConn, nil)
 			}
 		}
 	}

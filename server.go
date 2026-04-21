@@ -3,6 +3,7 @@ package faye
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 
 	"github.com/dsablic/faye-go/protocol"
@@ -28,14 +29,14 @@ func NewServer(logger utils.Logger, engine *Engine, validator Validator) *Server
 	return &Server{engine, logger, validator}
 }
 
-func (s *Server) HandleRequest(msges interface{}, conn protocol.Connection) {
-	if err := s.handleRequestInternal(msges, conn); err != nil {
+func (s *Server) HandleRequest(msges interface{}, conn protocol.Connection, r *http.Request) {
+	if err := s.handleRequestInternal(msges, conn, r); err != nil {
 		s.logger.Debugf("Invalid message %v: %v", msges, err)
 		s.respondWithError(conn, "Invalid message")
 	}
 }
 
-func (s *Server) handleRequestInternal(msges interface{}, conn protocol.Connection) error {
+func (s *Server) handleRequestInternal(msges interface{}, conn protocol.Connection, r *http.Request) error {
 	switch v := msges.(type) {
 	case []interface{}:
 		for _, msg := range v {
@@ -44,7 +45,7 @@ func (s *Server) handleRequestInternal(msges interface{}, conn protocol.Connecti
 				return fmt.Errorf("message is not a map: %T", msg)
 			}
 			var pm protocol.Message = m
-			s.handleMessage(&pm, conn)
+			s.handleMessage(&pm, conn, r)
 			return nil
 		}
 	case map[string]interface{}:
@@ -63,7 +64,7 @@ func (s *Server) handleRequestInternal(msges interface{}, conn protocol.Connecti
 				return fmt.Errorf("unexpected nested message type: %T", nested)
 			}
 		}
-		s.handleMessage(&m, conn)
+		s.handleMessage(&m, conn, r)
 		return nil
 	case url.Values:
 		var msgList []map[string]interface{}
@@ -78,7 +79,7 @@ func (s *Server) handleRequestInternal(msges interface{}, conn protocol.Connecti
 		for _, msg := range msgList {
 			msg["jsonp"] = v.Get("jsonp")
 			var m protocol.Message = msg
-			s.handleMessage(&m, conn)
+			s.handleMessage(&m, conn, r)
 		}
 		return nil
 	}
@@ -89,10 +90,13 @@ func (s *Server) getClient(request *protocol.Message, conn protocol.Connection) 
 	return s.engine.GetClient(request.ClientId())
 }
 
-func (s *Server) handleMessage(msg *protocol.Message, conn protocol.Connection) {
+func (s *Server) handleMessage(msg *protocol.Message, conn protocol.Connection, r *http.Request) {
+	if r != nil {
+		msg.SetRequest(r)
+	}
 	channel := msg.Channel()
 	if channel.IsMeta() {
-		s.handleMeta(msg, conn)
+		s.handleMeta(msg, conn, r)
 	} else {
 		if s.validator.PublishValid(msg) {
 			s.engine.Publish(msg, conn)
@@ -103,7 +107,10 @@ func (s *Server) handleMessage(msg *protocol.Message, conn protocol.Connection) 
 	}
 }
 
-func (s *Server) handleMeta(msg *protocol.Message, conn protocol.Connection) {
+func (s *Server) handleMeta(msg *protocol.Message, conn protocol.Connection, r *http.Request) {
+	if r != nil {
+		msg.SetRequest(r)
+	}
 	metaChannel := msg.Channel().MetaType()
 
 	if metaChannel == protocol.MetaHandshakeChannel {

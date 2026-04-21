@@ -57,7 +57,7 @@ func FayeHandlerWithCheckOrigin(server *faye.Server, checkOrigin CheckOriginFunc
 			transport.WebsocketServer(server)(ws)
 		} else {
 			if body := decode(r); body != nil {
-				transport.MakeLongPoll(body, server, w)
+				transport.MakeLongPoll(body, server, w, r)
 			} else {
 				http.Error(w, "Invalid http request", 400)
 				server.Logger().Debugf("Couldn't decode request body: %v", r)

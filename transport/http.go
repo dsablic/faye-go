@@ -62,11 +62,11 @@ func isValidJSONPCallback(callback string) bool {
 	return validJSONPCallback.MatchString(callback)
 }
 
-func MakeLongPoll(msgs interface{}, server Server, w http.ResponseWriter) {
+func MakeLongPoll(msgs interface{}, server Server, w http.ResponseWriter, r *http.Request) {
 	conn := NewLongPollingConnection()
 	done := make(chan bool, 1)
 	go func() {
-		server.HandleRequest(msgs, conn)
+		server.HandleRequest(msgs, conn, r)
 		done <- true
 	}()
 
