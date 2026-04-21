@@ -92,6 +92,21 @@ type Validator interface {
 }
 ```
 
+### HTTP Request Access
+
+For HTTP long-polling requests, the original `*http.Request` is available on the message in validator callbacks via `Message.Request()`. This allows validators to inspect HTTP headers, query parameters, or other request metadata:
+
+```go
+func (v validator) PublishValid(m *protocol.Message) bool {
+	if r := m.Request(); r != nil {
+		return r.Header.Get("X-Api-Token") == "secret"
+	}
+	return false
+}
+```
+
+WebSocket messages return `nil` from `Request()` since the original HTTP request is no longer available after the protocol upgrade.
+
 ## Testing
 
 ```bash
