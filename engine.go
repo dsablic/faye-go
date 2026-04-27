@@ -131,7 +131,6 @@ func (m *Engine) Disconnect(request *protocol.Message, client *protocol.Client, 
 	response["successful"] = true
 	m.logger.Debugf("Client %d disconnected", client.Id())
 	conn.Send([]protocol.Message{response})
-	go m.clients.RemoveClient(client)
 }
 
 func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
