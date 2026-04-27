@@ -58,15 +58,29 @@ func (sr *SubscriptionRegister) GetSubscribers(patterns []string) []interface{} 
 	sr.mutex.RLock()
 	defer sr.mutex.RUnlock()
 
-	seen := make(interfaceMap)
 	arr := make([]interface{}, 0)
+	var seen interfaceMap
 	for _, pattern := range patterns {
-		if subscribers, ok := sr.subscriberByPattern[pattern]; ok {
+		subscribers, ok := sr.subscriberByPattern[pattern]
+		if !ok {
+			continue
+		}
+		if seen == nil && len(arr) == 0 {
 			for subscriber := range subscribers {
-				if _, exists := seen[subscriber]; !exists {
-					seen[subscriber] = struct{}{}
-					arr = append(arr, subscriber)
-				}
+				arr = append(arr, subscriber)
+			}
+			continue
+		}
+		if seen == nil {
+			seen = make(interfaceMap, len(arr))
+			for _, s := range arr {
+				seen[s] = struct{}{}
+			}
+		}
+		for subscriber := range subscribers {
+			if _, exists := seen[subscriber]; !exists {
+				seen[subscriber] = struct{}{}
+				arr = append(arr, subscriber)
 			}
 		}
 	}
