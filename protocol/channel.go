@@ -60,25 +60,15 @@ func (c Channel) MetaType() MetaChannel {
 	}
 }
 
-// Returns all the channels patterns that could match this channel
-/*
-For:
-/foo/bar
-We should return these:
-/**
-/foo/**
-/foo/*
-/foo/bar
-*/
 func (c Channel) Expand() []string {
 	segments := strings.Split(c.name, "/")
-	num_segments := len(segments)
-	patterns := make([]string, num_segments+1)
-	patterns[0] = "/**"
-	for i := 1; i < len(segments); i = i + 2 {
-		patterns[i] = strings.Join(segments[:i+1], "/") + "/**"
+	numSegments := len(segments)
+	patterns := make([]string, 0, numSegments+2)
+	patterns = append(patterns, "/**")
+	for i := 1; i < numSegments-1; i++ {
+		patterns = append(patterns, strings.Join(segments[:i+1], "/")+"/**")
 	}
-	patterns[len(patterns)-2] = strings.Join(segments[:num_segments-1], "/") + "/*"
-	patterns[len(patterns)-1] = c.name
+	patterns = append(patterns, strings.Join(segments[:numSegments-1], "/")+"/*")
+	patterns = append(patterns, c.name)
 	return patterns
 }

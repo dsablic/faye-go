@@ -43,17 +43,23 @@ func NewEngine(logger utils.Logger, reapInterval time.Duration, statistics chan 
 	return engine
 }
 
+func (m *Engine) SetMaxClients(max int) {
+	m.clients.SetMaxClients(max)
+}
+
 func (m *Engine) GetClient(clientId uint32) *protocol.Client {
 	return m.clients.GetClient(clientId)
 }
 
-func (m *Engine) NewClient(conn protocol.Connection) *protocol.Client {
+func (m *Engine) NewClient(conn protocol.Connection) (*protocol.Client, error) {
 	atomic.CompareAndSwapUint32(&m.currentClientID, math.MaxUint32, 0)
 	newClient := protocol.NewClient(
 		atomic.AddUint32(&m.currentClientID, 1),
 		m.logger)
-	m.clients.AddClient(newClient)
-	return newClient
+	if err := m.clients.AddClient(newClient); err != nil {
+		return nil, fmt.Errorf("failed to add client: %w", err)
+	}
+	return newClient, nil
 }
 
 func (m *Engine) Connect(request *protocol.Message, client *protocol.Client, conn protocol.Connection) {
@@ -123,9 +129,9 @@ func (m *Engine) UnsubscribeClient(request *protocol.Message, client *protocol.C
 func (m *Engine) Disconnect(request *protocol.Message, client *protocol.Client, conn protocol.Connection) {
 	response := m.responseFromRequest(request)
 	response["successful"] = true
-	clientId := request.ClientId()
-	m.logger.Debugf("Client %d disconnected", clientId)
-	_ = response
+	m.logger.Debugf("Client %d disconnected", client.Id())
+	conn.Send([]protocol.Message{response})
+	go m.clients.RemoveClient(client)
 }
 
 func (m *Engine) Publish(request *protocol.Message, conn protocol.Connection) {
@@ -157,16 +163,22 @@ func (m *Engine) Handshake(request *protocol.Message, conn protocol.Connection) 
 	response := m.responseFromRequest(request)
 	response["successful"] = false
 	if version == protocol.BayeuxVersion {
-		newClientId = m.NewClient(conn).Id()
-		update := protocol.Message{
-			"channel":                  protocol.MetaPrefix + protocol.MetaHandshakeChannel,
-			"version":                  protocol.BayeuxVersion,
-			"advice":                   protocol.DefaultAdvice,
-			"supportedConnectionTypes": []string{"websocket"},
-			"successful":               true,
+		client, err := m.NewClient(conn)
+		if err != nil {
+			response["error"] = "Too many clients"
+			m.logger.Warnf("Handshake rejected: %v", err)
+		} else {
+			newClientId = client.Id()
+			update := protocol.Message{
+				"channel":                  protocol.MetaPrefix + protocol.MetaHandshakeChannel,
+				"version":                  protocol.BayeuxVersion,
+				"advice":                   protocol.DefaultAdvice,
+				"supportedConnectionTypes": []string{"websocket"},
+				"successful":               true,
+			}
+			update.SetClientId(newClientId)
+			response.Update(update)
 		}
-		update.SetClientId(newClientId)
-		response.Update(update)
 	} else {
 		response["error"] = fmt.Sprintf("Only supported version is '%s'", protocol.BayeuxVersion)
 	}

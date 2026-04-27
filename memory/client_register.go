@@ -1,10 +1,13 @@
 package memory
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/dsablic/faye-go/protocol"
 )
+
+var ErrMaxClientsReached = errors.New("maximum number of clients reached")
 
 type ClientRegisterCounters struct {
 	TotalFailed              uint64
@@ -17,24 +20,36 @@ type ClientRegister struct {
 	mutex         sync.RWMutex
 	clients       map[uint32]*protocol.Client
 	subscriptions *SubscriptionRegister
+	maxClients    int
 }
 
 func NewClientRegister() *ClientRegister {
 	return &ClientRegister{
 		clients:       make(map[uint32]*protocol.Client),
 		subscriptions: NewSubscriptionRegister(),
+		maxClients:    0,
 	}
 }
 
-func (cr *ClientRegister) AddClient(client *protocol.Client) {
+func (cr *ClientRegister) SetMaxClients(max int) {
 	cr.mutex.Lock()
+	defer cr.mutex.Unlock()
+	cr.maxClients = max
+}
+
+func (cr *ClientRegister) AddClient(client *protocol.Client) error {
+	cr.mutex.Lock()
+	defer cr.mutex.Unlock()
+
 	id := client.Id()
 	if old, ok := cr.clients[id]; ok {
 		old.Close()
 		delete(cr.clients, id)
+	} else if cr.maxClients > 0 && len(cr.clients) >= cr.maxClients {
+		return ErrMaxClientsReached
 	}
 	cr.clients[id] = client
-	cr.mutex.Unlock()
+	return nil
 }
 
 func (cr *ClientRegister) GetClient(clientId uint32) *protocol.Client {
@@ -45,6 +60,13 @@ func (cr *ClientRegister) GetClient(clientId uint32) *protocol.Client {
 		return client
 	}
 	return nil
+}
+
+func (cr *ClientRegister) RemoveClient(client *protocol.Client) {
+	cr.subscriptions.RemoveSubscription(client, client.Subscriptions())
+	cr.mutex.Lock()
+	defer cr.mutex.Unlock()
+	delete(cr.clients, client.Id())
 }
 
 func (cr *ClientRegister) AddSubscription(client *protocol.Client, patterns []string) {

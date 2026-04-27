@@ -85,6 +85,16 @@ func TestChannelExpand(t *testing.T) {
 			channel:  "/foo/bar",
 			expected: []string{"/**", "/foo/**", "/foo/*", "/foo/bar"},
 		},
+		{
+			name:     "three segment",
+			channel:  "/a/b/c",
+			expected: []string{"/**", "/a/**", "/a/b/**", "/a/b/*", "/a/b/c"},
+		},
+		{
+			name:     "four segment",
+			channel:  "/a/b/c/d",
+			expected: []string{"/**", "/a/**", "/a/b/**", "/a/b/c/**", "/a/b/c/*", "/a/b/c/d"},
+		},
 	}
 
 	for _, tt := range tests {

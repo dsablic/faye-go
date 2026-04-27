@@ -46,8 +46,8 @@ func (s *Server) handleRequestInternal(msges interface{}, conn protocol.Connecti
 			}
 			var pm protocol.Message = m
 			s.handleMessage(&pm, conn, r)
-			return nil
 		}
+		return nil
 	case map[string]interface{}:
 		var m protocol.Message = v
 		if nested, ok := m["message"]; ok {

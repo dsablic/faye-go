@@ -55,14 +55,18 @@ func (sr *SubscriptionRegister) RemoveSubscription(subscriber interface{}, patte
 }
 
 func (sr *SubscriptionRegister) GetSubscribers(patterns []string) []interface{} {
-	arr := make([]interface{}, 0)
 	sr.mutex.RLock()
 	defer sr.mutex.RUnlock()
 
+	seen := make(interfaceMap)
+	arr := make([]interface{}, 0)
 	for _, pattern := range patterns {
 		if subscribers, ok := sr.subscriberByPattern[pattern]; ok {
 			for subscriber := range subscribers {
-				arr = append(arr, subscriber)
+				if _, exists := seen[subscriber]; !exists {
+					seen[subscriber] = struct{}{}
+					arr = append(arr, subscriber)
+				}
 			}
 		}
 	}

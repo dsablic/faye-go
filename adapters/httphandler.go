@@ -9,6 +9,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const maxRequestBodySize = 1 << 20 // 1MB
+
 type CheckOriginFunc func(r *http.Request) bool
 
 func decode(r *http.Request) interface{} {
@@ -20,6 +22,7 @@ func decode(r *http.Request) interface{} {
 		return nil
 	}
 	if ct := r.Header.Get("Content-Type"); ct == "application/json" {
+		r.Body = http.MaxBytesReader(nil, r.Body, maxRequestBodySize)
 		var v interface{}
 		dec := json.NewDecoder(r.Body)
 		if err := dec.Decode(&v); err == nil {
@@ -27,6 +30,7 @@ func decode(r *http.Request) interface{} {
 		}
 		return nil
 	}
+	r.Body = http.MaxBytesReader(nil, r.Body, maxRequestBodySize)
 	r.ParseForm()
 	return r.Form
 }
