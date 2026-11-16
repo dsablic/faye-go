@@ -2,9 +2,11 @@ package transport
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/dsablic/faye-go/protocol"
 	"github.com/dsablic/faye-go/utils"
@@ -23,13 +25,25 @@ type WebSocketConnection struct {
 	mutex  sync.RWMutex
 }
 
+var writeTimeout = 10 * time.Second
+
+func (wc *WebSocketConnection) writeJSON(v interface{}) error {
+	wc.mutex.Lock()
+	defer wc.mutex.Unlock()
+	if err := wc.ws.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
+		return fmt.Errorf("failed to set websocket write deadline: %w", err)
+	}
+	if err := wc.ws.WriteJSON(v); err != nil {
+		return fmt.Errorf("failed to write to websocket: %w", err)
+	}
+	return nil
+}
+
 func (wc *WebSocketConnection) Send(msgs []protocol.Message) error {
 	if !wc.IsConnected() {
 		return errors.New("not connected")
 	}
-	wc.mutex.Lock()
-	err := wc.ws.WriteJSON(msgs)
-	wc.mutex.Unlock()
+	err := wc.writeJSON(msgs)
 	if err != nil {
 		wc.failed.Store(true)
 	}
@@ -77,11 +91,9 @@ func WebsocketServer(m Server) func(*websocket.Conn) {
 			}
 
 			if len(arr) == 0 {
-				wsConn.mutex.Lock()
-				if ws.WriteJSON([]string{}) != nil {
+				if wsConn.writeJSON([]string{}) != nil {
 					wsConn.Close()
 				}
-				wsConn.mutex.Unlock()
 			} else {
 				m.HandleRequest(data, &wsConn, nil)
 			}

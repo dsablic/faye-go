@@ -2,6 +2,8 @@ package memory
 
 import (
 	"errors"
+	"maps"
+	"slices"
 	"sync"
 
 	"github.com/dsablic/faye-go/protocol"
@@ -103,25 +105,31 @@ func (cr *ClientRegister) Publish(msg protocol.Message) {
 }
 
 func (cr *ClientRegister) Reap() *ClientRegisterCounters {
-	totals := ClientRegisterCounters{0, 0, 0, 0}
 	cr.mutex.RLock()
-	totals.SubscriberByPatternCount = cr.subscriptions.SubscriberByPatternCount.Load()
-	dead := []uint32{}
-	for id, client := range cr.clients {
+	clients := slices.Collect(maps.Values(cr.clients))
+	cr.mutex.RUnlock()
+
+	totals := ClientRegisterCounters{
+		SubscriberByPatternCount: cr.subscriptions.SubscriberByPatternCount.Load(),
+	}
+	dead := []*protocol.Client{}
+	for _, client := range clients {
 		if client.ShouldReap() {
 			cr.subscriptions.RemoveSubscription(client, client.Subscriptions())
-			dead = append(dead, id)
+			dead = append(dead, client)
 		}
 		c := client.ResetCounters()
 		totals.TotalFailed += c.Failed
 		totals.TotalSent += c.Sent
 	}
-	totals.Clients = uint(len(cr.clients) - len(dead))
-	cr.mutex.RUnlock()
+	totals.Clients = uint(len(clients) - len(dead))
+
 	if len(dead) > 0 {
 		cr.mutex.Lock()
-		for _, id := range dead {
-			delete(cr.clients, id)
+		for _, client := range dead {
+			if cr.clients[client.Id()] == client {
+				delete(cr.clients, client.Id())
+			}
 		}
 		cr.mutex.Unlock()
 	}

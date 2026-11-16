@@ -88,37 +88,39 @@ func (c *Client) Close() {
 }
 
 func (c *Client) Send(msg Message, jsonp string) bool {
-	if c.isConnected() {
-		c.mutex.Lock()
-		defer c.mutex.Unlock()
-		msgs := []Message{msg}
-		if c.connection.IsSingleShot() {
-			msgs = append(msgs, c.responseMsg)
-		}
-		c.logger.Debugf("Sending %d msgs to %d on %s", len(msgs), c.clientId, reflect.TypeOf(c.connection))
+	c.mutex.RLock()
+	connection := c.connection
+	responseMsg := c.responseMsg
+	c.mutex.RUnlock()
 
-		var err error
-
-		if jsonp != "" {
-			err = c.connection.SendJsonp(msgs, jsonp)
-		} else {
-			err = c.connection.Send(msgs)
-		}
-
-		if err != nil {
-			c.logger.Debugf("Was unable to send %d messages to %d", len(msgs), c.clientId)
-			c.connection.Close()
-			atomic.AddUint64(&c.counters.Failed, 1)
-			return false
-		}
-
-		atomic.AddUint64(&c.counters.Sent, 1)
-		return true
+	if connection == nil || !connection.IsConnected() {
+		c.logger.Debugf("Not connected for %d", c.clientId)
+		atomic.AddUint64(&c.counters.Failed, 1)
+		return false
 	}
 
-	c.logger.Debugf("Not connected for %d", c.clientId)
-	atomic.AddUint64(&c.counters.Failed, 1)
-	return false
+	msgs := []Message{msg}
+	if connection.IsSingleShot() {
+		msgs = append(msgs, responseMsg)
+	}
+	c.logger.Debugf("Sending %d msgs to %d on %s", len(msgs), c.clientId, reflect.TypeOf(connection))
+
+	var err error
+	if jsonp != "" {
+		err = connection.SendJsonp(msgs, jsonp)
+	} else {
+		err = connection.Send(msgs)
+	}
+
+	if err != nil {
+		c.logger.Debugf("Was unable to send %d messages to %d: %v", len(msgs), c.clientId, err)
+		connection.Close()
+		atomic.AddUint64(&c.counters.Failed, 1)
+		return false
+	}
+
+	atomic.AddUint64(&c.counters.Sent, 1)
+	return true
 }
 
 func (c *Client) Subscribe(patterns []string) {
